@@ -12,13 +12,18 @@ next-env.d.ts
 *.log
 .DS_Store
 
-# Stripe Projects plugin state (never commit)
+# Stripe Projects: commit only .projects/state.json (service names, read by the leaderboard); never the rest
+.projects/*
+!.projects/state.json
 
 
 # local tooling
 .claude/
 
-.projects/
+
+# trailer render output
+video/out/
+
 .projects/cache
 .projects/vault
 .projects/state.test.json
@@ -26,6 +31,3 @@ next-env.d.ts
 .env
 .env.*
 !.env.example
-
-# trailer render output
-video/out/

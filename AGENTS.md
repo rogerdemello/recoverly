@@ -10,7 +10,7 @@ Read [docs/technical-spec.md](docs/technical-spec.md) first; it is the build con
 
 ## Rules
 
-- Never print, log or commit secrets. `.env`, `.env.*` (except `.env.example`), `.projects/` and `.recoverly/` are git-ignored.
+- Never print, log or commit secrets. `.env`, `.env.*` (except `.env.example`), `.recoverly/` and everything in `.projects/` except `state.json` are git-ignored. `.projects/state.json` holds service names only and must stay committed: the Stripe Projects leaderboard reads it.
 - The scoring rules live only in `sandbox/recoverly_lib.py`. The TypeScript side validates sandbox output (`src/lib/agent/validate.ts`) and never re-scores.
 - The LLM never receives customer records, emails, scores or failure codes of a specific customer. Prompts carry schema, constants and the question only.
 - The API has no side-effect action (no charge, retry, cancel or send). Approval records a decision; delivery needs `RECOVERLY_ENABLE_SEND=true` and an adapter, and none ships.
