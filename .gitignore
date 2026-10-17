@@ -12,9 +12,10 @@ next-env.d.ts
 *.log
 .DS_Store
 
-# Stripe Projects: commit only .projects/state.json (service names, read by the leaderboard); never the rest
+# Stripe Projects: commit only .projects/state.json and state.local.json (project and resource ids, read by the leaderboard); never the rest
 .projects/*
 !.projects/state.json
+!.projects/state.local.json
 
 
 # local tooling
