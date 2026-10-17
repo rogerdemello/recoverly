@@ -126,11 +126,9 @@ export function Dashboard() {
 
   return (
     <div className="page">
-      <header className="header">
-        <div className="brand">
-          <h1>Recoverly</h1>
-          <p className="tagline">Explainable failed-payment recovery. Analysis code is written by an agent and run in an isolated sandbox.</p>
-        </div>
+      <header className="hero">
+        <div className="hero-top">
+        <span className="logo"><span className="logo-mark" aria-hidden="true" />Recoverly</span>
         <div className="chips" aria-label="Integrations">
           {healthError ? (
             <span className="chip off"><span className="dot" />Server unreachable</span>
@@ -143,7 +141,25 @@ export function Dashboard() {
           )}
           <button className="btn" onClick={() => setAuditOpen(true)}>Audit log</button>
         </div>
+        </div>
+        <div className="hero-body">
+          <h1>Win back failed payments, <span className="grad">with proof.</span></h1>
+          <p className="tagline">Explainable failed-payment recovery. Analysis code is written by an agent and run in an isolated sandbox.</p>
+          <ul className="hero-points">
+            <li>An agent writes the analysis code</li>
+            <li>Runs in an isolated CreateOS Sandbox</li>
+            <li>You approve every message</li>
+          </ul>
+        </div>
       </header>
+
+      {!dataset && !run && (
+        <ol className="steps3" aria-label="How it works">
+          <li><strong>Load your data</strong><span>Use the synthetic demo set or upload a CSV of failed invoices.</span></li>
+          <li><strong>Ask in plain English</strong><span>The agent plans it, writes Python, and runs it in the sandbox.</span></li>
+          <li><strong>Review and approve</strong><span>See a ranked, explained queue, then approve a drafted message.</span></li>
+        </ol>
+      )}
 
       {needsCode && (
         <div className="notice warn" role="alert">
