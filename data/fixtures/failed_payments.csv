@@ -1,0 +1,14 @@
+customer_id,customer_email,invoice_id,subscription_id,amount_due,currency,failure_code,failure_message,failed_at,attempt_count,next_payment_attempt,invoice_status,customer_created_at,hosted_invoice_url
+cus_synth_001,ava.stone@example.test,in_synth_001,sub_synth_001,49900,usd,expired_card,Your card has expired.,2026-10-15T08:10:00Z,1,,open,2024-09-02T00:00:00Z,https://example.test/hosted-invoice/in_synth_001
+cus_synth_002,ben.ortiz@example.test,in_synth_002,sub_synth_002,8900,usd,insufficient_funds,Your card has insufficient funds.,2026-10-16T06:30:00Z,1,2026-10-19T06:30:00Z,open,2025-03-14T00:00:00Z,https://example.test/hosted-invoice/in_synth_002
+cus_synth_003,cara.lund@example.test,in_synth_003,sub_synth_003,1900,usd,generic_decline,Your card was declined.,2026-10-14T14:00:00Z,1,,open,2025-11-20T00:00:00Z,https://example.test/hosted-invoice/in_synth_003
+cus_synth_004,dev.patel@example.test,in_synth_004,sub_synth_004,14900,usd,insufficient_funds,Your card has insufficient funds.,2026-10-12T09:00:00Z,2,,paid,2023-06-01T00:00:00Z,https://example.test/hosted-invoice/in_synth_004
+cus_synth_005,eli.wong@example.test,in_synth_005,sub_synth_005,24900,usd,generic_decline,Your card was declined.,2026-09-20T10:00:00Z,4,,uncollectible,2024-01-15T00:00:00Z,https://example.test/hosted-invoice/in_synth_005
+cus_synth_006,fay.novak@example.test,in_synth_006,sub_synth_006,12900,usd,insufficient_funds,Your card has insufficient funds.,2026-10-09T11:00:00Z,3,,open,2024-05-05T00:00:00Z,https://example.test/hosted-invoice/in_synth_006
+cus_synth_007,gus.reed@example.test,in_synth_007,sub_synth_007,7900,usd,authentication_required,This payment requires authentication.,2026-10-16T22:00:00Z,1,,open,2026-02-10T00:00:00Z,https://example.test/hosted-invoice/in_synth_007
+cus_synth_008,hana.kim@example.test,in_synth_008,,19900,usd,generic_decline,,2026-10-13T05:00:00Z,2,unknown,open,,
+cus_synth_009,ivan.cole@example.test,in_synth_009,sub_synth_009,32000,usd,generic_decline,Your card was declined.,2026-10-14T20:00:00Z,2,,open,2022-08-19T00:00:00Z,https://example.test/hosted-invoice/in_synth_009
+cus_synth_010,jade.fox@example.test,in_synth_010,sub_synth_010,5900,usd,insufficient_funds,Your card has insufficient funds.,2026-10-16T18:00:00Z,1,2026-10-21T18:00:00Z,open,2025-09-09T00:00:00Z,https://example.test/hosted-invoice/in_synth_010
+cus_synth_011,kai.bell@example.test,in_synth_011,sub_synth_011,2900,usd,expired_card,Your card has expired.,2026-10-17T02:00:00Z,1,,open,2026-10-07T00:00:00Z,https://example.test/hosted-invoice/in_synth_011
+cus_synth_012,lena.moss@example.test,in_synth_012,sub_synth_012,9900,eur,expired_card,Your card has expired.,2026-10-15T13:00:00Z,1,,open,2025-06-30T00:00:00Z,https://example.test/hosted-invoice/in_synth_012
+cus_synth_013,milo.dane@example.test,in_synth_013,sub_synth_013,6900,usd,lost_card,Your card was declined.,2026-10-16T09:00:00Z,1,,open,2025-01-12T00:00:00Z,https://example.test/hosted-invoice/in_synth_013

@@ -11,7 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "spike:sandbox": "tsx --env-file=.env scripts/sandbox-spike.ts",
-    "analyze": "tsx --env-file=.env scripts/run-analysis.ts"
+    "analyze": "tsx --env-file=.env scripts/run-analysis.ts",
+    "capture:golden": "tsx --env-file=.env scripts/capture-golden.ts",
+    "test:sandbox": "tsx scripts/run-sandbox-tests.ts",
+    "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
     "@nodeops-createos/sandbox": "0.8.2",

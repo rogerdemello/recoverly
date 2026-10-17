@@ -1,0 +1,1283 @@
+{
+  "schema_version": "1",
+  "as_of": "2026-10-17T12:00:00Z",
+  "plan": {
+    "intent": "rank_recoverable",
+    "filters": {
+      "failed_within_days": 7
+    },
+    "group_by": [],
+    "top_n": 10,
+    "then_draft": false,
+    "explanation": "Rank unresolved failed payments from the last 7 days by recovery priority, using failure code, retry status, amount, age and customer tenure.",
+    "fields_used": [
+      "failed_at",
+      "amount_due",
+      "currency",
+      "failure_code",
+      "next_payment_attempt",
+      "attempt_count",
+      "invoice_status",
+      "customer_created_at"
+    ]
+  },
+  "summary": "10 failed payments need attention: $1,362.00 at risk (9 invoices, 9 customers); €99.00 at risk (1 invoice, 1 customer). 1 resolved invoice(s) excluded from the queues.",
+  "metrics": {
+    "records_total": 13,
+    "records_in_scope": 11,
+    "by_currency": [
+      {
+        "currency": "usd",
+        "failed_count": 9,
+        "affected_customers": 9,
+        "amount_at_risk_minor": 136200,
+        "in_recovery_minor": 14800,
+        "action_needed_minor": 101500,
+        "failed_minor": 19900
+      },
+      {
+        "currency": "eur",
+        "failed_count": 1,
+        "affected_customers": 1,
+        "amount_at_risk_minor": 9900,
+        "in_recovery_minor": 0,
+        "action_needed_minor": 9900,
+        "failed_minor": 0
+      }
+    ],
+    "by_failure_code": [
+      {
+        "currency": "usd",
+        "failure_code": "generic_decline",
+        "count": 3,
+        "amount_minor": 53800
+      },
+      {
+        "currency": "usd",
+        "failure_code": "expired_card",
+        "count": 2,
+        "amount_minor": 52800
+      },
+      {
+        "currency": "usd",
+        "failure_code": "insufficient_funds",
+        "count": 2,
+        "amount_minor": 14800
+      },
+      {
+        "currency": "eur",
+        "failure_code": "expired_card",
+        "count": 1,
+        "amount_minor": 9900
+      },
+      {
+        "currency": "usd",
+        "failure_code": "authentication_required",
+        "count": 1,
+        "amount_minor": 7900
+      },
+      {
+        "currency": "usd",
+        "failure_code": "lost_card",
+        "count": 1,
+        "amount_minor": 6900
+      }
+    ],
+    "by_state": [
+      {
+        "currency": "usd",
+        "state": "action_needed",
+        "count": 6,
+        "amount_minor": 101500
+      },
+      {
+        "currency": "usd",
+        "state": "failed",
+        "count": 1,
+        "amount_minor": 19900
+      },
+      {
+        "currency": "usd",
+        "state": "recovered",
+        "count": 1,
+        "amount_minor": 14900
+      },
+      {
+        "currency": "usd",
+        "state": "in_recovery",
+        "count": 2,
+        "amount_minor": 14800
+      },
+      {
+        "currency": "eur",
+        "state": "action_needed",
+        "count": 1,
+        "amount_minor": 9900
+      }
+    ]
+  },
+  "queues": [
+    {
+      "currency": "usd",
+      "items": [
+        {
+          "invoice_id": "in_synth_001",
+          "customer_id": "cus_synth_001",
+          "customer_email_masked": "a***@example.test",
+          "subscription_id": "sub_synth_001",
+          "currency": "usd",
+          "amount_minor": 49900,
+          "state": "action_needed",
+          "priority": "urgent",
+          "score": 85,
+          "components": {
+            "amount_norm": 1,
+            "recovery": 0.9,
+            "urgency": 0.377,
+            "value": 1
+          },
+          "recommended_action": "update_payment_method",
+          "reason": "Card has expired; customer must supply a new card. No retry is scheduled. Largest score driver: amount at risk.",
+          "confidence": "high",
+          "missing_inputs": [],
+          "failure_code": "expired_card",
+          "attempt_count": 1,
+          "days_since_failure": 2.16,
+          "retry": {
+            "status": "none_scheduled",
+            "next_attempt_at": null
+          },
+          "hosted_invoice_url_present": true,
+          "evidence": [
+            {
+              "field": "amount_due",
+              "value": 49900,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "currency",
+              "value": "usd",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_code",
+              "value": "expired_card",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_message",
+              "value": "Your card has expired.",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "attempt_count",
+              "value": 1,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "next_payment_attempt",
+              "value": null,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "invoice_status",
+              "value": "open",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failed_at",
+              "value": "2026-10-15T08:10:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "customer_created_at",
+              "value": "2024-09-02T00:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "days_since_failure",
+              "value": 2.16,
+              "source": "agent_inference"
+            },
+            {
+              "field": "retry_status",
+              "value": "none_scheduled",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recovery_signal",
+              "value": 0.9,
+              "source": "agent_inference"
+            },
+            {
+              "field": "urgency",
+              "value": 0.377,
+              "source": "agent_inference"
+            },
+            {
+              "field": "priority",
+              "value": "urgent",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recommended_action",
+              "value": "update_payment_method",
+              "source": "agent_inference"
+            },
+            {
+              "field": "confidence",
+              "value": "high",
+              "source": "agent_inference"
+            }
+          ],
+          "rank": 1
+        },
+        {
+          "invoice_id": "in_synth_009",
+          "customer_id": "cus_synth_009",
+          "customer_email_masked": "i***@example.test",
+          "subscription_id": "sub_synth_009",
+          "currency": "usd",
+          "amount_minor": 32000,
+          "state": "action_needed",
+          "priority": "high",
+          "score": 55.5,
+          "components": {
+            "amount_norm": 0.641,
+            "recovery": 0.35,
+            "urgency": 0.395,
+            "value": 1
+          },
+          "recommended_action": "review_manually",
+          "reason": "Card declined, reason unknown. No retry is scheduled. Largest score driver: amount at risk.",
+          "confidence": "high",
+          "missing_inputs": [],
+          "failure_code": "generic_decline",
+          "attempt_count": 2,
+          "days_since_failure": 2.667,
+          "retry": {
+            "status": "none_scheduled",
+            "next_attempt_at": null
+          },
+          "hosted_invoice_url_present": true,
+          "evidence": [
+            {
+              "field": "amount_due",
+              "value": 32000,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "currency",
+              "value": "usd",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_code",
+              "value": "generic_decline",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_message",
+              "value": "Your card was declined.",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "attempt_count",
+              "value": 2,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "next_payment_attempt",
+              "value": null,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "invoice_status",
+              "value": "open",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failed_at",
+              "value": "2026-10-14T20:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "customer_created_at",
+              "value": "2022-08-19T00:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "days_since_failure",
+              "value": 2.667,
+              "source": "agent_inference"
+            },
+            {
+              "field": "retry_status",
+              "value": "none_scheduled",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recovery_signal",
+              "value": 0.35,
+              "source": "agent_inference"
+            },
+            {
+              "field": "urgency",
+              "value": 0.395,
+              "source": "agent_inference"
+            },
+            {
+              "field": "priority",
+              "value": "high",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recommended_action",
+              "value": "review_manually",
+              "source": "agent_inference"
+            },
+            {
+              "field": "confidence",
+              "value": "high",
+              "source": "agent_inference"
+            }
+          ],
+          "rank": 2
+        },
+        {
+          "invoice_id": "in_synth_007",
+          "customer_id": "cus_synth_007",
+          "customer_email_masked": "g***@example.test",
+          "subscription_id": "sub_synth_007",
+          "currency": "usd",
+          "amount_minor": 7900,
+          "state": "action_needed",
+          "priority": "medium",
+          "score": 40.4,
+          "components": {
+            "amount_norm": 0.158,
+            "recovery": 0.8,
+            "urgency": 0.321,
+            "value": 0.684
+          },
+          "recommended_action": "update_payment_method",
+          "reason": "Payment needs customer authentication. No retry is scheduled. Largest score driver: likelihood of recovery.",
+          "confidence": "high",
+          "missing_inputs": [],
+          "failure_code": "authentication_required",
+          "attempt_count": 1,
+          "days_since_failure": 0.583,
+          "retry": {
+            "status": "none_scheduled",
+            "next_attempt_at": null
+          },
+          "hosted_invoice_url_present": true,
+          "evidence": [
+            {
+              "field": "amount_due",
+              "value": 7900,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "currency",
+              "value": "usd",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_code",
+              "value": "authentication_required",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_message",
+              "value": "This payment requires authentication.",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "attempt_count",
+              "value": 1,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "next_payment_attempt",
+              "value": null,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "invoice_status",
+              "value": "open",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failed_at",
+              "value": "2026-10-16T22:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "customer_created_at",
+              "value": "2026-02-10T00:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "days_since_failure",
+              "value": 0.583,
+              "source": "agent_inference"
+            },
+            {
+              "field": "retry_status",
+              "value": "none_scheduled",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recovery_signal",
+              "value": 0.8,
+              "source": "agent_inference"
+            },
+            {
+              "field": "urgency",
+              "value": 0.321,
+              "source": "agent_inference"
+            },
+            {
+              "field": "priority",
+              "value": "medium",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recommended_action",
+              "value": "update_payment_method",
+              "source": "agent_inference"
+            },
+            {
+              "field": "confidence",
+              "value": "high",
+              "source": "agent_inference"
+            }
+          ],
+          "rank": 3
+        },
+        {
+          "invoice_id": "in_synth_002",
+          "customer_id": "cus_synth_002",
+          "customer_email_masked": "b***@example.test",
+          "subscription_id": "sub_synth_002",
+          "currency": "usd",
+          "amount_minor": 8900,
+          "state": "in_recovery",
+          "priority": "medium",
+          "score": 33.9,
+          "components": {
+            "amount_norm": 0.178,
+            "recovery": 0.6,
+            "urgency": 0.044,
+            "value": 1
+          },
+          "recommended_action": "wait_for_retry",
+          "reason": "Insufficient funds; a retry may succeed. A retry is scheduled for 2026-10-19T06:30:00Z. Largest score driver: likelihood of recovery.",
+          "confidence": "high",
+          "missing_inputs": [],
+          "failure_code": "insufficient_funds",
+          "attempt_count": 1,
+          "days_since_failure": 1.229,
+          "retry": {
+            "status": "scheduled",
+            "next_attempt_at": "2026-10-19T06:30:00Z"
+          },
+          "hosted_invoice_url_present": true,
+          "evidence": [
+            {
+              "field": "amount_due",
+              "value": 8900,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "currency",
+              "value": "usd",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_code",
+              "value": "insufficient_funds",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_message",
+              "value": "Your card has insufficient funds.",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "attempt_count",
+              "value": 1,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "next_payment_attempt",
+              "value": "2026-10-19T06:30:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "invoice_status",
+              "value": "open",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failed_at",
+              "value": "2026-10-16T06:30:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "customer_created_at",
+              "value": "2025-03-14T00:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "days_since_failure",
+              "value": 1.229,
+              "source": "agent_inference"
+            },
+            {
+              "field": "retry_status",
+              "value": "scheduled",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recovery_signal",
+              "value": 0.6,
+              "source": "agent_inference"
+            },
+            {
+              "field": "urgency",
+              "value": 0.044,
+              "source": "agent_inference"
+            },
+            {
+              "field": "priority",
+              "value": "medium",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recommended_action",
+              "value": "wait_for_retry",
+              "source": "agent_inference"
+            },
+            {
+              "field": "confidence",
+              "value": "high",
+              "source": "agent_inference"
+            }
+          ],
+          "rank": 4
+        },
+        {
+          "invoice_id": "in_synth_011",
+          "customer_id": "cus_synth_011",
+          "customer_email_masked": "k***@example.test",
+          "subscription_id": "sub_synth_011",
+          "currency": "usd",
+          "amount_minor": 2900,
+          "state": "action_needed",
+          "priority": "medium",
+          "score": 31.7,
+          "components": {
+            "amount_norm": 0.058,
+            "recovery": 0.9,
+            "urgency": 0.315,
+            "value": 0.029
+          },
+          "recommended_action": "update_payment_method",
+          "reason": "Card has expired; customer must supply a new card. No retry is scheduled. Largest score driver: likelihood of recovery.",
+          "confidence": "high",
+          "missing_inputs": [],
+          "failure_code": "expired_card",
+          "attempt_count": 1,
+          "days_since_failure": 0.417,
+          "retry": {
+            "status": "none_scheduled",
+            "next_attempt_at": null
+          },
+          "hosted_invoice_url_present": true,
+          "evidence": [
+            {
+              "field": "amount_due",
+              "value": 2900,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "currency",
+              "value": "usd",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_code",
+              "value": "expired_card",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_message",
+              "value": "Your card has expired.",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "attempt_count",
+              "value": 1,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "next_payment_attempt",
+              "value": null,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "invoice_status",
+              "value": "open",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failed_at",
+              "value": "2026-10-17T02:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "customer_created_at",
+              "value": "2026-10-07T00:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "days_since_failure",
+              "value": 0.417,
+              "source": "agent_inference"
+            },
+            {
+              "field": "retry_status",
+              "value": "none_scheduled",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recovery_signal",
+              "value": 0.9,
+              "source": "agent_inference"
+            },
+            {
+              "field": "urgency",
+              "value": 0.315,
+              "source": "agent_inference"
+            },
+            {
+              "field": "priority",
+              "value": "medium",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recommended_action",
+              "value": "update_payment_method",
+              "source": "agent_inference"
+            },
+            {
+              "field": "confidence",
+              "value": "high",
+              "source": "agent_inference"
+            }
+          ],
+          "rank": 5
+        },
+        {
+          "invoice_id": "in_synth_010",
+          "customer_id": "cus_synth_010",
+          "customer_email_masked": "j***@example.test",
+          "subscription_id": "sub_synth_010",
+          "currency": "usd",
+          "amount_minor": 5900,
+          "state": "in_recovery",
+          "priority": "medium",
+          "score": 30.9,
+          "components": {
+            "amount_norm": 0.118,
+            "recovery": 0.6,
+            "urgency": 0.027,
+            "value": 1
+          },
+          "recommended_action": "wait_for_retry",
+          "reason": "Insufficient funds; a retry may succeed. A retry is scheduled for 2026-10-21T18:00:00Z. Largest score driver: likelihood of recovery.",
+          "confidence": "high",
+          "missing_inputs": [],
+          "failure_code": "insufficient_funds",
+          "attempt_count": 1,
+          "days_since_failure": 0.75,
+          "retry": {
+            "status": "scheduled",
+            "next_attempt_at": "2026-10-21T18:00:00Z"
+          },
+          "hosted_invoice_url_present": true,
+          "evidence": [
+            {
+              "field": "amount_due",
+              "value": 5900,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "currency",
+              "value": "usd",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_code",
+              "value": "insufficient_funds",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_message",
+              "value": "Your card has insufficient funds.",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "attempt_count",
+              "value": 1,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "next_payment_attempt",
+              "value": "2026-10-21T18:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "invoice_status",
+              "value": "open",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failed_at",
+              "value": "2026-10-16T18:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "customer_created_at",
+              "value": "2025-09-09T00:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "days_since_failure",
+              "value": 0.75,
+              "source": "agent_inference"
+            },
+            {
+              "field": "retry_status",
+              "value": "scheduled",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recovery_signal",
+              "value": 0.6,
+              "source": "agent_inference"
+            },
+            {
+              "field": "urgency",
+              "value": 0.027,
+              "source": "agent_inference"
+            },
+            {
+              "field": "priority",
+              "value": "medium",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recommended_action",
+              "value": "wait_for_retry",
+              "source": "agent_inference"
+            },
+            {
+              "field": "confidence",
+              "value": "high",
+              "source": "agent_inference"
+            }
+          ],
+          "rank": 6
+        },
+        {
+          "invoice_id": "in_synth_008",
+          "customer_id": "cus_synth_008",
+          "customer_email_masked": "h***@example.test",
+          "subscription_id": null,
+          "currency": "usd",
+          "amount_minor": 19900,
+          "state": "failed",
+          "priority": "low",
+          "score": 29.8,
+          "components": {
+            "amount_norm": 0.399,
+            "recovery": 0.35,
+            "urgency": 0.153,
+            "value": 0
+          },
+          "recommended_action": "review_manually",
+          "reason": "Card declined, reason unknown. Retry information is unavailable. Largest score driver: amount at risk.",
+          "confidence": "low",
+          "missing_inputs": [
+            "failure_message",
+            "customer_created_at",
+            "subscription_id",
+            "hosted_invoice_url",
+            "next_payment_attempt"
+          ],
+          "failure_code": "generic_decline",
+          "attempt_count": 2,
+          "days_since_failure": 4.292,
+          "retry": {
+            "status": "unknown",
+            "next_attempt_at": null
+          },
+          "hosted_invoice_url_present": false,
+          "evidence": [
+            {
+              "field": "amount_due",
+              "value": 19900,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "currency",
+              "value": "usd",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_code",
+              "value": "generic_decline",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_message",
+              "value": null,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "attempt_count",
+              "value": 2,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "next_payment_attempt",
+              "value": "unknown",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "invoice_status",
+              "value": "open",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failed_at",
+              "value": "2026-10-13T05:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "customer_created_at",
+              "value": null,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "days_since_failure",
+              "value": 4.292,
+              "source": "agent_inference"
+            },
+            {
+              "field": "retry_status",
+              "value": "unknown",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recovery_signal",
+              "value": 0.35,
+              "source": "agent_inference"
+            },
+            {
+              "field": "urgency",
+              "value": 0.153,
+              "source": "agent_inference"
+            },
+            {
+              "field": "priority",
+              "value": "low",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recommended_action",
+              "value": "review_manually",
+              "source": "agent_inference"
+            },
+            {
+              "field": "confidence",
+              "value": "low",
+              "source": "agent_inference"
+            }
+          ],
+          "rank": 7
+        },
+        {
+          "invoice_id": "in_synth_003",
+          "customer_id": "cus_synth_003",
+          "customer_email_masked": "c***@example.test",
+          "subscription_id": "sub_synth_003",
+          "currency": "usd",
+          "amount_minor": 1900,
+          "state": "action_needed",
+          "priority": "low",
+          "score": 27.6,
+          "components": {
+            "amount_norm": 0.038,
+            "recovery": 0.35,
+            "urgency": 0.404,
+            "value": 0.908
+          },
+          "recommended_action": "contact_customer",
+          "reason": "Card declined, reason unknown. No retry is scheduled. Largest score driver: customer tenure.",
+          "confidence": "high",
+          "missing_inputs": [],
+          "failure_code": "generic_decline",
+          "attempt_count": 1,
+          "days_since_failure": 2.917,
+          "retry": {
+            "status": "none_scheduled",
+            "next_attempt_at": null
+          },
+          "hosted_invoice_url_present": true,
+          "evidence": [
+            {
+              "field": "amount_due",
+              "value": 1900,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "currency",
+              "value": "usd",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_code",
+              "value": "generic_decline",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_message",
+              "value": "Your card was declined.",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "attempt_count",
+              "value": 1,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "next_payment_attempt",
+              "value": null,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "invoice_status",
+              "value": "open",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failed_at",
+              "value": "2026-10-14T14:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "customer_created_at",
+              "value": "2025-11-20T00:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "days_since_failure",
+              "value": 2.917,
+              "source": "agent_inference"
+            },
+            {
+              "field": "retry_status",
+              "value": "none_scheduled",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recovery_signal",
+              "value": 0.35,
+              "source": "agent_inference"
+            },
+            {
+              "field": "urgency",
+              "value": 0.404,
+              "source": "agent_inference"
+            },
+            {
+              "field": "priority",
+              "value": "low",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recommended_action",
+              "value": "contact_customer",
+              "source": "agent_inference"
+            },
+            {
+              "field": "confidence",
+              "value": "high",
+              "source": "agent_inference"
+            }
+          ],
+          "rank": 8
+        },
+        {
+          "invoice_id": "in_synth_013",
+          "customer_id": "cus_synth_013",
+          "customer_email_masked": "m***@example.test",
+          "subscription_id": "sub_synth_013",
+          "currency": "usd",
+          "amount_minor": 6900,
+          "state": "action_needed",
+          "priority": "low",
+          "score": 25.5,
+          "components": {
+            "amount_norm": 0.138,
+            "recovery": 0.1,
+            "urgency": 0.34,
+            "value": 1
+          },
+          "recommended_action": "review_manually",
+          "reason": "Card declined, reason not disclosed. No retry is scheduled. Largest score driver: customer tenure.",
+          "confidence": "high",
+          "missing_inputs": [],
+          "failure_code": "lost_card",
+          "attempt_count": 1,
+          "days_since_failure": 1.125,
+          "retry": {
+            "status": "none_scheduled",
+            "next_attempt_at": null
+          },
+          "hosted_invoice_url_present": true,
+          "evidence": [
+            {
+              "field": "amount_due",
+              "value": 6900,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "currency",
+              "value": "usd",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_code",
+              "value": "lost_card",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_message",
+              "value": "Your card was declined.",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "attempt_count",
+              "value": 1,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "next_payment_attempt",
+              "value": null,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "invoice_status",
+              "value": "open",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failed_at",
+              "value": "2026-10-16T09:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "customer_created_at",
+              "value": "2025-01-12T00:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "days_since_failure",
+              "value": 1.125,
+              "source": "agent_inference"
+            },
+            {
+              "field": "retry_status",
+              "value": "none_scheduled",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recovery_signal",
+              "value": 0.1,
+              "source": "agent_inference"
+            },
+            {
+              "field": "urgency",
+              "value": 0.34,
+              "source": "agent_inference"
+            },
+            {
+              "field": "priority",
+              "value": "low",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recommended_action",
+              "value": "review_manually",
+              "source": "agent_inference"
+            },
+            {
+              "field": "confidence",
+              "value": "high",
+              "source": "agent_inference"
+            }
+          ],
+          "rank": 9
+        }
+      ]
+    },
+    {
+      "currency": "eur",
+      "items": [
+        {
+          "invoice_id": "in_synth_012",
+          "customer_id": "cus_synth_012",
+          "customer_email_masked": "l***@example.test",
+          "subscription_id": "sub_synth_012",
+          "currency": "eur",
+          "amount_minor": 9900,
+          "state": "action_needed",
+          "priority": "urgent",
+          "score": 84.9,
+          "components": {
+            "amount_norm": 1,
+            "recovery": 0.9,
+            "urgency": 0.37,
+            "value": 1
+          },
+          "recommended_action": "update_payment_method",
+          "reason": "Card has expired; customer must supply a new card. No retry is scheduled. Largest score driver: amount at risk.",
+          "confidence": "high",
+          "missing_inputs": [],
+          "failure_code": "expired_card",
+          "attempt_count": 1,
+          "days_since_failure": 1.958,
+          "retry": {
+            "status": "none_scheduled",
+            "next_attempt_at": null
+          },
+          "hosted_invoice_url_present": true,
+          "evidence": [
+            {
+              "field": "amount_due",
+              "value": 9900,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "currency",
+              "value": "eur",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_code",
+              "value": "expired_card",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failure_message",
+              "value": "Your card has expired.",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "attempt_count",
+              "value": 1,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "next_payment_attempt",
+              "value": null,
+              "source": "stripe_fact"
+            },
+            {
+              "field": "invoice_status",
+              "value": "open",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "failed_at",
+              "value": "2026-10-15T13:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "customer_created_at",
+              "value": "2025-06-30T00:00:00Z",
+              "source": "stripe_fact"
+            },
+            {
+              "field": "days_since_failure",
+              "value": 1.958,
+              "source": "agent_inference"
+            },
+            {
+              "field": "retry_status",
+              "value": "none_scheduled",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recovery_signal",
+              "value": 0.9,
+              "source": "agent_inference"
+            },
+            {
+              "field": "urgency",
+              "value": 0.37,
+              "source": "agent_inference"
+            },
+            {
+              "field": "priority",
+              "value": "urgent",
+              "source": "agent_inference"
+            },
+            {
+              "field": "recommended_action",
+              "value": "update_payment_method",
+              "source": "agent_inference"
+            },
+            {
+              "field": "confidence",
+              "value": "high",
+              "source": "agent_inference"
+            }
+          ],
+          "rank": 1
+        }
+      ]
+    }
+  ],
+  "resolved": [
+    {
+      "invoice_id": "in_synth_004",
+      "customer_id": "cus_synth_004",
+      "currency": "usd",
+      "amount_minor": 14900,
+      "state": "recovered",
+      "recommended_action": "do_not_pursue",
+      "reason": "Invoice is paid."
+    }
+  ],
+  "warnings": [
+    "single_item_currency:eur",
+    "missing_inputs:1_records"
+  ],
+  "data_quality": {
+    "records_with_missing_inputs": 1,
+    "unrecognized_failure_codes": [],
+    "currencies": [
+      "usd",
+      "eur"
+    ],
+    "single_item_currencies": [
+      "eur"
+    ]
+  }
+}

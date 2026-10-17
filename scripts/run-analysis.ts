@@ -1,115 +1,58 @@
 /**
- * M2 CLI: natural-language question → plan → generated code → CreateOS Sandbox → ranked JSON.
+ * CLI for the whole agent: question -> plan -> generated Python -> CreateOS Sandbox -> validated queue.
  *
- *   npm run analyze -- "Show me the failed payments most worth recovering."
+ *   npm run analyze -- "What are the top failure reasons?"
+ *   npm run analyze -- --replay            # run the saved script (no LLM)
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { runAgent, type FixtureDataset } from "../src/lib/analysis/agent";
+import { runPipeline } from "../src/lib/agent/pipeline";
+import { formatMoney } from "../src/lib/domain/money";
+import { DEMO_QUESTION } from "../src/lib/domain/schemas";
+import { loadFixtureDataset } from "../src/lib/store";
 
-const question =
-  process.argv.slice(2).join(" ").trim() ||
-  "Which failed payments represent the most recoverable revenue? Explain the reason and recommend the next safe action.";
+const args = process.argv.slice(2);
+const replay = args.includes("--replay");
+const question = args.filter((a) => !a.startsWith("--")).join(" ").trim() || DEMO_QUESTION;
 
-function loadFixture(): FixtureDataset {
-  const p = path.join(process.cwd(), "data", "fixture-failed-payments.json");
-  return JSON.parse(readFileSync(p, "utf8")) as FixtureDataset;
-}
-
-function money(minor: number, currency: string): string {
-  return `${(minor / 100).toFixed(2)} ${currency.toUpperCase()}`;
-}
-
-async function main(): Promise<void> {
-  console.log("── Recoverly agent ──────────────────────────────");
-  console.log("Question:", question);
-  console.log("");
-
-  const outcome = await runAgent(question, loadFixture());
+async function main() {
+  console.log(`Question: ${question}${replay ? "  [replay]" : ""}\n`);
+  const outcome = await runPipeline({
+    dataset: loadFixtureDataset(),
+    question,
+    analysisId: "cli",
+    replay,
+    emit: (event, data) => {
+      if (event === "plan") console.log("PLAN", JSON.stringify((data as { plan: unknown }).plan));
+      if (event === "guard") console.log("GUARD", JSON.stringify(data));
+      if (event === "sandbox") console.log("SANDBOX", JSON.stringify(data));
+      if (event === "code") console.log(`CODE (attempt ${(data as { attempt: number }).attempt}):\n${(data as { code: string }).code}\n`);
+    },
+  });
 
   if (!outcome.ok) {
-    console.error(`FAILED at stage: ${outcome.stage} (attempts=${outcome.attempts})`);
-    console.error(outcome.message);
-    if (outcome.plan) {
-      console.error("\nPlan that was used:");
-      console.error(JSON.stringify(outcome.plan, null, 2));
-    }
-    if (outcome.sandbox?.stderr) {
-      console.error("\nSandbox stderr (truncated):");
-      console.error(outcome.sandbox.stderr.slice(0, 2000));
-    }
-    if (outcome.code) {
-      console.error("\nGenerated code:");
-      console.error(outcome.code);
-    }
+    console.error(`\nFAILED ${outcome.code}: ${outcome.message}`);
+    if (outcome.details) console.error(JSON.stringify(outcome.details, null, 2));
     process.exit(1);
   }
 
-  const { plan, code, result, sandbox, attempts, warnings } = outcome;
-
-  console.log("── Plan ─────────────────────────────────────────");
-  console.log(JSON.stringify(plan, null, 2));
-  console.log("");
-
-  console.log("── Generated code (ran in CreateOS Sandbox) ─────");
-  console.log(code);
-  console.log("");
-
-  console.log("── Execution ────────────────────────────────────");
-  console.log(
-    `status=${sandbox.status} exit=${sandbox.exitCode} exec_ms=${sandbox.execMs} sandbox=${sandbox.sandboxId} attempts=${attempts}`,
-  );
-  for (const w of warnings) console.log(`warning: ${w}`);
-  console.log("");
-
-  console.log("── Result ───────────────────────────────────────");
-  console.log(result.summary);
-  console.log("");
-  console.log("Metrics by currency:");
-  for (const [cur, m] of Object.entries(result.metrics.by_currency)) {
-    console.log(
-      `  ${cur.toUpperCase()}: at risk ${money(m.amount_at_risk_minor, cur)} · ${m.failed_count} failures · ${m.customer_count} customers`,
-    );
-  }
-  console.log("");
-  console.log("By failure code:");
-  for (const [code2, m] of Object.entries(result.metrics.by_failure_code)) {
-    const amounts = Object.entries(m.amount_by_currency)
-      .map(([c, a]) => money(a, c))
-      .join(" + ");
-    console.log(`  ${code2}: ${m.count} (${amounts})`);
-  }
-  console.log("");
-  if (result.ranked_items.length === 0) {
-    console.log("Ranked queue: empty (no records matched).");
-    for (const w of result.warnings) console.log(`  - ${w}`);
-  } else {
-    console.log(`Ranked queue (top ${result.ranked_items.length}):`);
-    for (const item of result.ranked_items) {
+  const { result } = outcome;
+  console.log(`\n${result.summary}`);
+  for (const w of result.warnings) console.log(`warning: ${w}`);
+  for (const q of result.queues) {
+    console.log(`\n${q.currency.toUpperCase()} queue`);
+    for (const i of q.items) {
       console.log(
-        `  #${item.rank} [${item.priority.toUpperCase()} ${item.priority_score.toFixed(3)}] ` +
-          `${item.customer_id} · ${money(item.amount_due, item.currency)} · ${item.failure_code} → ${item.recommended_action} ` +
-          `(confidence ${item.confidence.toFixed(2)})`,
+        `  #${i.rank} ${i.invoice_id} ${formatMoney(i.amount_minor, i.currency)} ${i.priority.toUpperCase()} ${i.score} ${i.state} -> ${i.recommended_action} (${i.confidence})`,
       );
-      if (item.rank_reason) console.log(`       ${item.rank_reason}`);
-      if (item.missing_fields.length) console.log(`       missing: ${item.missing_fields.join(", ")}`);
     }
   }
-
-  if (result.warnings.length) {
-    console.log("");
-    console.log("Result warnings:");
-    for (const w of result.warnings) console.log(`  - ${w}`);
+  if (result.resolved.length) console.log(`\nResolved: ${result.resolved.map((r) => r.invoice_id).join(", ")}`);
+  if (result.metrics.by_failure_code.length) {
+    console.log("\nBy failure code:");
+    for (const r of result.metrics.by_failure_code) console.log(`  ${r.currency} ${r.failure_code}: ${r.count} / ${formatMoney(r.amount_minor, r.currency)}`);
   }
-  if (result.data_quality.notes.length) {
-    console.log("");
-    console.log("Data quality:");
-    for (const n of result.data_quality.notes) console.log(`  - ${n}`);
-  }
-  process.exit(0);
 }
 
 main().catch((err) => {
-  console.error("Agent crashed:", err instanceof Error ? err.stack || err.message : err);
+  console.error(err instanceof Error ? err.message : String(err));
   process.exit(1);
 });

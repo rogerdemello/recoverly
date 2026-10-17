@@ -51,7 +51,11 @@ export interface SandboxRunResult {
   sandboxId: string | null;
   /** Human-readable cause when status is "sandbox_error". Never contains credentials. */
   error?: string;
+  /** API error code (technical-spec section 8) for sandbox infrastructure failures. */
+  errorCode?: SandboxErrorCode;
 }
+
+export type SandboxErrorCode = "SANDBOX_UNAVAILABLE" | "SANDBOX_RATE_LIMITED" | "SANDBOX_OUT_OF_CREDIT";
 
 export interface RunPythonOptions {
   files: SandboxJobFile[];
@@ -157,6 +161,12 @@ export function describeSandboxError(err: unknown): string {
   return `Unexpected sandbox failure: ${err instanceof Error ? err.message : String(err)}`;
 }
 
+export function sandboxErrorCode(err: unknown): SandboxErrorCode {
+  if (err instanceof CreateosSandboxPaymentRequiredError) return "SANDBOX_OUT_OF_CREDIT";
+  if (err instanceof CreateosSandboxRateLimitError || err instanceof CreateosSandboxPermissionError) return "SANDBOX_RATE_LIMITED";
+  return "SANDBOX_UNAVAILABLE";
+}
+
 function assertSafeRelativePath(p: string): void {
   if (!p || p.startsWith("/") || p.split("/").includes("..") || /[\0\n\r]/.test(p) || !/^[\w./-]+$/.test(p)) {
     throw new CreateosSandboxError(`Unsafe job file path: ${JSON.stringify(p)}`);
@@ -191,7 +201,7 @@ async function runOnce(sandbox: Sandbox, opts: RunPythonOptions): Promise<Sandbo
     const { stdout, stderr, exit_code, error } = res.result;
 
     if (error) {
-      return { status: "sandbox_error", exitCode: null, stdout: "", stderr: "", execMs: res.exec_ms, sandboxId: sandbox.id, error };
+      return { status: "sandbox_error", exitCode: null, stdout: "", stderr: "", execMs: res.exec_ms, sandboxId: sandbox.id, error, errorCode: "SANDBOX_UNAVAILABLE" };
     }
     return {
       status: exit_code === 0 ? "ok" : exit_code === 124 ? "timeout" : "nonzero_exit",
@@ -224,11 +234,12 @@ async function runPythonUnqueued(opts: RunPythonOptions): Promise<SandboxRunResu
         execMs: null,
         sandboxId: null,
         error: describeSandboxError(err),
+        errorCode: sandboxErrorCode(err),
       };
     }
   }
   // Unreachable, but keeps the return type total.
-  return { status: "sandbox_error", exitCode: null, stdout: "", stderr: "", execMs: null, sandboxId: null, error: "Sandbox unavailable." };
+  return { status: "sandbox_error", exitCode: null, stdout: "", stderr: "", execMs: null, sandboxId: null, error: "Sandbox unavailable.", errorCode: "SANDBOX_UNAVAILABLE" };
 }
 
 /**
