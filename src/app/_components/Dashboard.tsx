@@ -158,7 +158,7 @@ export function Dashboard() {
 
       <section className="card" aria-label="Data source">
         <header>
-          <h2>1 · Data</h2>
+          <h2>Data</h2>
           <div className="row">
             <button className="btn primary" onClick={loadDemo} disabled={loadingData}>Load demo data</button>
             <button className="btn" onClick={() => fileRef.current?.click()} disabled={loadingData}>Upload CSV</button>
@@ -201,7 +201,7 @@ export function Dashboard() {
 
       <section className="card" aria-label="Ask">
         <header>
-          <h2>2 · Ask</h2>
+          <h2>Ask</h2>
           <span className={`counter ${overLimit ? "over" : ""}`}>{question.length} / {MAX_QUESTION}</span>
         </header>
         <label htmlFor="question" className="sr-only">Question</label>

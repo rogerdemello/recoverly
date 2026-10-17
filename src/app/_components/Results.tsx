@@ -147,7 +147,7 @@ export function Queues({ result, onOpen }: { result: AnalysisResult; onOpen: (it
                   <th>Recommended action</th>
                   <th>Confidence</th>
                   <th className="num" title="Heuristic triage score from 0 to 100. Not a prediction of recovery.">
-                    Score <span aria-hidden="true">ⓘ</span>
+                    <span style={{ borderBottom: "1px dotted currentColor" }}>Score</span>
                     <span className="sr-only">Heuristic triage score from 0 to 100. Not a prediction of recovery.</span>
                   </th>
                 </tr>
