@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recoverly trailer</title>
+<style>
+  html, body { margin: 0; background: #1b1a17; color: #ddd7c9; font: 14px system-ui, sans-serif; }
+  body { display: grid; gap: 12px; justify-items: center; padding: 14px; }
+  canvas { width: min(100%, 1280px); height: auto; aspect-ratio: 16 / 9; background: #f5f2ea; border-radius: 4px; }
+  .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  button { padding: 8px 16px; border-radius: 6px; border: 1px solid #5a564b; background: #2b2924; color: inherit; cursor: pointer; font: inherit; }
+  button.rec { background: #3e5c4d; border-color: #3e5c4d; color: #fbf9f3; }
+  #status { color: #a9cbb6; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<div class="bar">
+  <button id="play">Preview</button>
+  <button id="render" class="rec">Render MP4</button>
+  <button id="rec">Record live (fallback)</button>
+  <span id="status">idle</span>
+</div>
+
+<script src="/vendor/mp4-muxer.js"></script>
+<script>
+/* Recoverly trailer. Every frame is a program: one draw(t) function over a timeline, no footage.
+   Rendered live to a canvas; "Record MP4" captures the canvas plus synthesized audio with MediaRecorder. */
+const W = 1280, H = 720, FPS = 30;
+const C = {
+  paper: "#f5f2ea", surface: "#fbf9f3", ink: "#1f1d19", fg: "#2b2823", muted: "#6d675c", line: "#ddd7c9",
+  accent: "#3e5c4d", accentLight: "#a9cbb6", brick: "#94382c", brickLight: "#e58b78", ochre: "#86601c", info: "#43607a",
+  cream: "#f3efe4",
+};
+const SERIF = '"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif';
+const SANS = 'system-ui,"Segoe UI",Roboto,sans-serif';
+const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+
+const BPM = 96, BAR = 240 / BPM; // 2.5 s per bar
+// scene boundaries, in seconds (all on bar lines)
+const SC = [0, 5, 7.5, 13.75, 18.75, 26.25, 31.25, 36.25, 41.25];
+const TOTAL = SC[SC.length - 1];
+
+const cv = document.getElementById("c");
+const g = cv.getContext("2d");
+
+/* ---------- helpers ---------- */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = (t) => 1 - Math.pow(1 - clamp(t), 3);
+const easeInOut = (t) => { t = clamp(t); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+const easeOutBack = (t) => { t = clamp(t); const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+
+function rr(x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+function txt(s, x, y, o = {}) {
+  g.save();
+  g.globalAlpha *= o.alpha ?? 1;
+  g.font = `${o.style ?? ""} ${o.weight ?? 400} ${o.size ?? 28}px ${o.font ?? SANS}`.trim();
+  g.fillStyle = o.color ?? C.fg;
+  g.textAlign = o.align ?? "left";
+  g.textBaseline = o.base ?? "alphabetic";
+  if (o.spacing) g.letterSpacing = `${o.spacing}px`;
+  g.fillText(s, x, y);
+  g.restore();
+}
+function measure(s, size, font = SANS, weight = 400, style = "") {
+  g.save();
+  g.font = `${style} ${weight} ${size}px ${font}`.trim();
+  const w = g.measureText(s).width;
+  g.restore();
+  return w;
+}
+function wrap(s, maxW, size, font = SANS, weight = 400) {
+  const words = s.split(" ");
+  const lines = [];
+  let line = "";
+  for (const w of words) {
+    const next = line ? `${line} ${w}` : w;
+    if (measure(next, size, font, weight) > maxW && line) { lines.push(line); line = w; } else line = next;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+const typed = (s, t, t0, cps) => s.slice(0, Math.max(0, Math.min(s.length, Math.floor((t - t0) * cps))));
+
+/** Words that slide up and fade in one after another, centered or left aligned. */
+function words(s, t, t0, step, x, y, o = {}) {
+  const parts = s.split(" ");
+  const size = o.size ?? 64, font = o.font ?? SERIF, weight = o.weight ?? 500;
+  const space = measure(" ", size, font, weight, o.style ?? "");
+  const widths = parts.map((p) => measure(p, size, font, weight, o.style ?? ""));
+  const total = widths.reduce((a, b) => a + b, 0) + space * (parts.length - 1);
+  let cx = o.align === "center" ? x - total / 2 : x;
+  parts.forEach((p, i) => {
+    const a = easeOut(prog(t, t0 + i * step, t0 + i * step + 0.45));
+    const color = typeof o.color === "function" ? o.color(p, i) : o.color ?? C.fg;
+    txt(p, cx, y + (1 - a) * 26, { size, font, weight, style: o.style, color, alpha: a * (o.alpha ?? 1) });
+    cx += widths[i] + space;
+  });
+}
+
+function bg(color) { g.fillStyle = color; g.fillRect(0, 0, W, H); }
+function pill(label, x, y, color, fill, size = 17) {
+  const w = measure(label, size, SANS, 600) + 24;
+  g.fillStyle = fill; rr(x, y - size - 3, w, size + 12, (size + 12) / 2); g.fill();
+  txt(label, x + 12, y + 1, { size, weight: 600, color });
+  return w;
+}
+function caption(s, t, t0, y = 650, color = C.muted) {
+  const a = easeOut(prog(t, t0, t0 + 0.5));
+  txt(s, W / 2, y + (1 - a) * 14, { size: 28, font: SERIF, style: "italic", color, align: "center", alpha: a });
+}
+function label(s, color = C.muted) { txt(s, 70, 70, { size: 16, font: MONO, color, spacing: 2 }); }
+
+/* ---------- content ---------- */
+const QUESTION = "Find the failed payments from the last seven days with the highest recoverable revenue. Explain the reason and recommend the next safe action.";
+const CODE = [
+  "as_of, records = lib.load()",
+  "ctx = lib.build_context(records, as_of)",
+  "items = [lib.enrich(r, ctx) for r in records]",
+  'scoped = [it for it in items if keep(it, PLAN["filters"])]',
+  "queues, truncated = lib.rank_queues(scoped, 10)",
+  "result = lib.build_result(PLAN, as_of, len(records), ...)",
+  "print(json.dumps(result))",
+];
+const ROWS = [
+  { rank: 1, who: "a***@example.test", id: "in_synth_001", amt: "$499.00", pri: "URGENT", score: 85.0, act: "Update payment method" },
+  { rank: 2, who: "i***@example.test", id: "in_synth_009", amt: "$320.00", pri: "HIGH", score: 55.5, act: "Review manually" },
+  { rank: 3, who: "g***@example.test", id: "in_synth_007", amt: "$79.00", pri: "MEDIUM", score: 40.4, act: "Update payment method" },
+  { rank: 4, who: "b***@example.test", id: "in_synth_002", amt: "$89.00", pri: "MEDIUM", score: 33.9, act: "Wait for retry" },
+  { rank: 5, who: "k***@example.test", id: "in_synth_011", amt: "$29.00", pri: "MEDIUM", score: 31.7, act: "Update payment method" },
+];
+const PRI = {
+  URGENT: [C.brick, "#f2dcd4"],
+  HIGH: ["#a0572a", "#f3e2d3"],
+  MEDIUM: ["#86701f", "#f3e9cd"],
+};
+const STAGES = [["Plan", "1.3 s"], ["Code", "3.8 s"], ["Guard", "0 ms"], ["Sandbox", "74 ms"], ["Validate", "0 ms"]];
+const STAGE_T = [2.8, 3.5, 4.1, 4.6, 5.2]; // local to scene 3
+const CHECKS = ["length", "amount present", "link or support", "support present", "no card numbers", "no threats", "no internal data", "non disclosure", "no stray contacts", "no placeholders"];
+const MSG = [
+  "Hi,",
+  "The card we have on file has expired. Invoice in_synth_001",
+  "for $499.00 is still unpaid. You can review and pay the",
+  "invoice securely here: example.test/hosted-invoice/in_synth_001",
+  "If you need help, contact support@example.test.",
+  "Thanks, Acme Cloud (demo)",
+];
+
+/* ---------- scenes (t is local seconds) ---------- */
+function sceneHook(t) {
+  bg(C.ink);
+  // slow drifting grain of small ledger ticks for texture
+  g.save();
+  g.globalAlpha = 0.06;
+  g.fillStyle = C.cream;
+  for (let i = 0; i < 46; i++) {
+    const x = (i * 97) % W, y = (i * 53 + t * 14) % H;
+    g.fillRect(x, y, 22, 1);
+  }
+  g.restore();
+  const fade = 1 - easeInOut(prog(t, 2.3, 2.7));
+  g.save();
+  g.globalAlpha = fade;
+  words("A failed payment", t, 0.25, 0.14, 150, 300, { size: 84, color: C.cream });
+  words("doesn't announce itself.", t, 0.95, 0.12, 150, 400, { size: 84, color: C.cream, style: "italic" });
+  g.restore();
+  if (t > 2.6) {
+    const a = t - 2.7;
+    words("It just quietly", t, 2.7, 0.14, 150, 300, { size: 84, color: C.cream });
+    const shake = t > 3.5 && t < 3.75 ? Math.sin(t * 90) * 4 * (1 - prog(t, 3.5, 3.75)) : 0;
+    words("churns.", t, 3.0, 0.2, 150 + shake, 400, { size: 84, color: C.brickLight, style: "italic" });
+    void a;
+  }
+  if (t > 3.7) {
+    const a2 = easeOut(prog(t, 3.7, 4.3));
+    txt("Which customers do you save first?", 150, 520 + (1 - a2) * 14, { size: 30, font: MONO, color: C.accentLight, alpha: a2 });
+    const caret = Math.floor(t * 2.4) % 2 === 0 ? 1 : 0;
+    g.fillStyle = C.accentLight; g.globalAlpha = a2 * caret;
+    g.fillRect(150 + measure("Which customers do you save first?", 30, MONO) + 8, 494, 14, 30);
+    g.globalAlpha = 1;
+  }
+}
+
+function sceneLogo(t) {
+  bg(C.paper);
+  const name = "Recoverly";
+  const a = easeOut(prog(t, 0.1, 1.0));
+  const size = 150;
+  const w = measure(name, size, SERIF, 500);
+  const x = W / 2 - w / 2;
+  g.save();
+  g.beginPath(); g.rect(x - 10, 150, (w + 20) * easeInOut(prog(t, 0.1, 0.9)), 220); g.clip();
+  txt(name, x, 300, { size, font: SERIF, weight: 500, color: C.fg });
+  g.restore();
+  // underline sweep
+  g.fillStyle = C.accent;
+  g.fillRect(x, 330, w * easeInOut(prog(t, 0.6, 1.4)), 5);
+  txt("Explainable failed-payment recovery.", W / 2, 410, { size: 34, font: SERIF, style: "italic", color: C.muted, align: "center", alpha: easeOut(prog(t, 1.1, 1.7)) });
+  const tags = ["agent writes the code", "sandbox runs it", "a human decides"];
+  let tx = W / 2 - (tags.reduce((s, tg) => s + measure(tg, 20) + 44, 0) + 16 * 2) / 2;
+  tags.forEach((tg, i) => {
+    const al = easeOut(prog(t, 1.5 + i * 0.18, 2.0 + i * 0.18));
+    const wd = measure(tg, 20) + 36;
+    g.save(); g.globalAlpha = al;
+    g.fillStyle = "#e3eadf"; rr(tx, 460 + (1 - al) * 10, wd, 40, 20); g.fill();
+    txt(tg, tx + 18, 487 + (1 - al) * 10, { size: 20, color: C.accent, weight: 500 });
+    g.restore();
+    tx += wd + 16;
+  });
+}
+
+function sceneAsk(t) {
+  bg(C.paper);
+  label("01  ASK");
+  const bx = 140, by = 130, bw = 1000, bh = 200;
+  const a = easeOut(prog(t, 0, 0.5));
+  g.save(); g.globalAlpha = a;
+  g.fillStyle = C.surface; rr(bx, by + (1 - a) * 16, bw, bh, 10); g.fill();
+  g.strokeStyle = "#c9c1ae"; g.lineWidth = 1.5; g.stroke();
+  g.restore();
+  const shown = typed(QUESTION, t, 0.5, 70);
+  const lines = wrap(QUESTION, bw - 70, 30);
+  let used = 0;
+  lines.forEach((ln, i) => {
+    const part = shown.slice(used, used + ln.length + 1).slice(0, ln.length);
+    used += ln.length + 1;
+    txt(part, bx + 35, by + 62 + i * 44, { size: 30, color: C.fg });
+  });
+  if (shown.length < QUESTION.length && Math.floor(t * 3) % 2 === 0) {
+    const last = Math.min(lines.length - 1, Math.floor(shown.length === 0 ? 0 : lines.findIndex((_, i) => lines.slice(0, i + 1).join(" ").length >= shown.length)));
+    const li = last < 0 ? lines.length - 1 : last;
+    const consumed = lines.slice(0, li).join(" ").length + (li ? 1 : 0);
+    const partLen = shown.length - consumed;
+    const cx = bx + 35 + measure(lines[li].slice(0, partLen), 30);
+    g.fillStyle = C.accent; g.fillRect(cx + 2, by + 62 + li * 44 - 26, 3, 32);
+  }
+  // pipeline
+  const cw = 200, gap = 24, total = 5 * cw + 4 * gap, sx = (W - total) / 2, sy = 400;
+  txt("The agent plans first. Then it writes code. Then the sandbox runs it.", W / 2, 372, { size: 22, color: C.muted, align: "center", alpha: easeOut(prog(t, 2.4, 2.9)) });
+  STAGES.forEach(([name, ms], i) => {
+    const lit = t >= STAGE_T[i];
+    const running = !lit && t >= (i === 0 ? 2.5 : STAGE_T[i - 1]);
+    const appear = easeOut(prog(t, 2.5 + i * 0.05, 2.9 + i * 0.05));
+    const x = sx + i * (cw + gap);
+    g.save(); g.globalAlpha = appear;
+    g.fillStyle = lit ? "#e1ebdc" : C.surface; rr(x, sy + (1 - appear) * 12, cw, 120, 8); g.fill();
+    g.strokeStyle = lit ? C.accent : running ? C.accent : C.line; g.lineWidth = lit || running ? 2 : 1.2; g.stroke();
+    txt(name, x + 20, sy + 52 + (1 - appear) * 12, { size: 30, font: SERIF, color: C.fg });
+    const status = lit ? `ok  ${ms}` : running ? "running" + ".".repeat(1 + Math.floor(t * 4) % 3) : "pending";
+    txt(status, x + 20, sy + 92 + (1 - appear) * 12, { size: 18, font: MONO, color: lit ? C.accent : C.muted });
+    g.restore();
+    if (i < 4) {
+      g.fillStyle = lit ? C.accent : C.line;
+      g.fillRect(x + cw + 4, sy + 60, gap - 8, 2);
+    }
+  });
+  caption("Every figure comes from validated sandbox output.", t, 4.9, 640);
+}
+
+function sceneCode(t) {
+  bg(C.paper);
+  label("02  RUN");
+  // code panel
+  const px = 70, py = 120, pw = 700, ph = 470;
+  g.fillStyle = "#f1ede2"; rr(px, py, pw, ph, 10); g.fill();
+  g.strokeStyle = C.line; g.lineWidth = 1.2; g.stroke();
+  txt("main.py  (written by the agent)", px + 28, py + 46, { size: 18, font: MONO, color: C.muted });
+  let n = Math.floor(Math.max(0, t - 0.3) * 120);
+  CODE.forEach((ln, i) => {
+    const part = ln.slice(0, Math.max(0, Math.min(ln.length, n)));
+    n -= ln.length + 4;
+    const col = part.startsWith("print") ? C.accent : C.fg;
+    txt(part, px + 28, py + 100 + i * 46, { size: 20, font: MONO, color: col });
+  });
+  // sandbox card
+  const sx = 830, sy = 120, sw = 380, sh = 470;
+  const a = easeOut(prog(t, 0.6, 1.2));
+  g.save(); g.globalAlpha = a;
+  g.fillStyle = C.ink; rr(sx, sy + (1 - a) * 18, sw, sh, 12); g.fill();
+  txt("CreateOS Sandbox", sx + 30, sy + 60 + (1 - a) * 18, { size: 30, font: SERIF, color: C.cream });
+  txt("isolated micro-VM", sx + 30, sy + 92 + (1 - a) * 18, { size: 18, font: MONO, color: C.accentLight });
+  // lock icon
+  const lx = sx + sw - 80, ly = sy + 40 + (1 - a) * 18;
+  g.strokeStyle = C.accentLight; g.lineWidth = 4;
+  g.beginPath(); g.arc(lx + 20, ly + 6, 13, Math.PI, 0); g.stroke();
+  g.fillStyle = C.accentLight; rr(lx, ly + 6, 40, 32, 5); g.fill();
+  const rows = [["egress", "DENY ALL"], ["timeout", "20 s hard cap"], ["secrets", "none inside"], ["data", "emails masked"]];
+  rows.forEach(([k, v], i) => {
+    const ra = easeOut(prog(t, 1.4 + i * 0.35, 1.9 + i * 0.35));
+    txt(k, sx + 30, sy + 170 + i * 56 + (1 - ra) * 10, { size: 18, font: MONO, color: "#8d9a8f", alpha: ra });
+    txt(v, sx + 150, sy + 170 + i * 56 + (1 - ra) * 10, { size: 22, font: MONO, color: C.cream, alpha: ra, weight: 600 });
+  });
+  // run result
+  const done = prog(t, 3.3, 3.8);
+  if (done > 0) {
+    g.fillStyle = "#2e4a3b"; rr(sx + 24, sy + sh - 100, sw - 48, 66, 8); g.fill();
+    txt("exit 0   74 ms", sx + 44, sy + sh - 60, { size: 22, font: MONO, color: C.accentLight, alpha: done });
+  }
+  g.restore();
+  // validation stamp
+  const v = easeOutBack(prog(t, 4.0, 4.5));
+  if (v > 0) {
+    g.save(); g.translate(px + pw / 2, py + ph + 40); g.scale(v, v);
+    const label2 = "validated against the raw data";
+    const w2 = measure(label2, 26, SERIF, 500, "italic") + 70;
+    g.fillStyle = "#e1ebdc"; rr(-w2 / 2, -26, w2, 52, 26); g.fill();
+    txt("✓", -w2 / 2 + 22, 9, { size: 28, color: C.accent, weight: 700 });
+    txt(label2, -w2 / 2 + 54, 8, { size: 26, font: SERIF, style: "italic", color: C.accent });
+    g.restore();
+  }
+}
+
+function countUp(from, to, t, t0, t1) { return lerp(from, to, easeOut(prog(t, t0, t1))); }
+
+function sceneResults(t) {
+  bg(C.paper);
+  label("03  DECIDE");
+  const big = countUp(0, 1362, t, 0.1, 1.5);
+  txt(`$${big.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 70, 170, { size: 92, font: SERIF, weight: 500, color: C.fg });
+  txt("USD at risk  ·  9 customers", 74, 208, { size: 22, color: C.muted, alpha: easeOut(prog(t, 0.8, 1.4)) });
+  const ea = easeOut(prog(t, 1.2, 1.8));
+  txt("€99.00", 780, 170, { size: 60, font: SERIF, color: C.fg, alpha: ea });
+  txt("EUR, ranked separately. Never mixed.", 782, 208, { size: 22, color: C.muted, alpha: ea });
+  // ledger
+  const x0 = 70, y0 = 250, rowH = 60;
+  const cols = [0, 70, 380, 520, 700, 840]; // rank, customer, amount, priority, score, action
+  ["RANK", "CUSTOMER", "AMOUNT", "PRIORITY", "SCORE", "RECOMMENDED ACTION"].forEach((h, i) => {
+    txt(h, x0 + cols[i], y0, { size: 14, font: SANS, weight: 600, color: C.muted, spacing: 1.5, alpha: easeOut(prog(t, 1.4, 1.9)) });
+  });
+  g.fillStyle = "#c9c1ae"; g.fillRect(x0, y0 + 14, (W - 2 * x0) * easeOut(prog(t, 1.4, 2.2)), 1.5);
+  ROWS.forEach((r, i) => {
+    const a = easeOut(prog(t, 1.9 + i * 0.28, 2.5 + i * 0.28));
+    const y = y0 + 40 + i * rowH + (1 - a) * 22;
+    const hot = i === 1 && t > 4.3;
+    g.save(); g.globalAlpha = a;
+    if (hot) {
+      const k = easeOut(prog(t, 4.3, 4.8));
+      g.fillStyle = `rgba(62,92,77,${0.10 * k})`; rr(x0 - 14, y - 38, W - 2 * x0 + 28, rowH - 4, 6); g.fill();
+      g.strokeStyle = C.accent; g.lineWidth = 2; g.globalAlpha = a * k; rr(x0 - 14, y - 38, W - 2 * x0 + 28, rowH - 4, 6); g.stroke();
+      g.globalAlpha = a;
+    }
+    txt(String(r.rank), x0 + cols[0], y, { size: 26, font: SERIF, color: C.fg });
+    txt(r.who, x0 + cols[1], y - 4, { size: 22, color: C.fg });
+    txt(r.id, x0 + cols[1], y + 14, { size: 13, font: MONO, color: C.muted });
+    txt(r.amt, x0 + cols[2], y, { size: 26, font: SERIF, color: C.fg, weight: 600 });
+    pill(r.pri, x0 + cols[3], y, PRI[r.pri][0], PRI[r.pri][1], 16);
+    txt(r.score.toFixed(1), x0 + cols[4], y, { size: 26, font: SERIF, color: C.fg });
+    txt(r.act, x0 + cols[5], y, { size: 22, color: C.fg });
+    g.fillStyle = "#e6e0d2"; g.fillRect(x0, y + 20, W - 2 * x0, 1);
+    g.restore();
+  });
+  if (t > 4.6) {
+    const a = easeOut(prog(t, 4.6, 5.2));
+    txt("The $320 account ranks #2, and goes to manual review.", W / 2, 640, { size: 30, font: SERIF, style: "italic", color: C.accent, align: "center", alpha: a });
+  }
+  if (t > 6.0) {
+    const a = easeOut(prog(t, 6.0, 6.5));
+    g.save(); g.globalAlpha = a * 0.0; g.restore();
+    txt("The biggest amount is not the most recoverable. Recoverly shows why.", W / 2, 690, { size: 22, color: C.muted, align: "center", alpha: a });
+  }
+}
+
+function sceneHeal(t) {
+  bg(C.paper);
+  label("04  SELF-HEAL");
+  words("Crash? Bad output? The error goes back to the agent.", t, 0.1, 0.07, W / 2, 150, { size: 46, align: "center", color: C.fg });
+  const cw = 480, ch = 270, y = 220;
+  const x1 = 90, x2 = W - 90 - cw;
+  // attempt 1
+  const a1 = easeOut(prog(t, 0.8, 1.3));
+  g.save(); g.globalAlpha = a1;
+  g.fillStyle = "#faf0ec"; rr(x1, y + (1 - a1) * 16, cw, ch, 10); g.fill();
+  g.strokeStyle = C.brick; g.lineWidth = 2; g.stroke();
+  txt("ATTEMPT 1", x1 + 26, y + 44, { size: 15, weight: 600, color: C.brick, spacing: 2 });
+  txt("import os", x1 + 26, y + 100, { size: 24, font: MONO, color: C.fg });
+  txt('print(os.listdir("/"))', x1 + 26, y + 142, { size: 24, font: MONO, color: C.fg });
+  g.restore();
+  if (t > 1.6) {
+    const k = easeOutBack(prog(t, 1.6, 2.0));
+    g.save(); g.translate(x1 + 26, y + 205); g.scale(k, k);
+    const l = "GUARD REJECTED  import_not_allowed:os";
+    const w = measure(l, 17, MONO, 600) + 28;
+    g.fillStyle = "#f2dcd4"; rr(0, -22, w, 40, 8); g.fill();
+    txt(l, 14, 5, { size: 17, font: MONO, color: C.brick, weight: 600 });
+    g.restore();
+    // strike line through the bad import
+    g.strokeStyle = C.brick; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(x1 + 26, y + 92); g.lineTo(x1 + 26 + 118 * easeOut(prog(t, 1.7, 2.1)), y + 92); g.stroke();
+  }
+  // arrow with the error travelling back
+  if (t > 2.3) {
+    const k = easeInOut(prog(t, 2.3, 3.1));
+    const ax = x1 + cw + 20, bx = x2 - 20, ay = y + ch / 2;
+    g.strokeStyle = C.muted; g.lineWidth = 3; g.setLineDash([10, 8]);
+    g.beginPath(); g.moveTo(ax, ay); g.lineTo(lerp(ax, bx, k), ay); g.stroke(); g.setLineDash([]);
+    txt("retry", (ax + bx) / 2, ay - 18, { size: 20, font: MONO, color: C.muted, align: "center", alpha: easeOut(prog(t, 2.3, 2.8)) });
+    if (k > 0.98) {
+      g.fillStyle = C.muted; g.beginPath(); g.moveTo(bx, ay); g.lineTo(bx - 14, ay - 9); g.lineTo(bx - 14, ay + 9); g.closePath(); g.fill();
+    }
+  }
+  // attempt 2
+  const a2 = easeOut(prog(t, 3.0, 3.5));
+  g.save(); g.globalAlpha = a2;
+  g.fillStyle = "#edf4ea"; rr(x2, y + (1 - a2) * 16, cw, ch, 10); g.fill();
+  g.strokeStyle = C.accent; g.lineWidth = 2; g.stroke();
+  txt("ATTEMPT 2", x2 + 26, y + 44, { size: 15, weight: 600, color: C.accent, spacing: 2 });
+  txt("import recoverly_lib as lib", x2 + 26, y + 100, { size: 22, font: MONO, color: C.fg });
+  txt("result = lib.build_result(...)", x2 + 26, y + 142, { size: 22, font: MONO, color: C.fg });
+  g.restore();
+  if (t > 3.6) {
+    const k = easeOutBack(prog(t, 3.6, 4.0));
+    g.save(); g.translate(x2 + 26, y + 205); g.scale(k, k);
+    const l = "✓ GUARD  ✓ SANDBOX  ✓ VALIDATED";
+    const w = measure(l, 17, MONO, 600) + 28;
+    g.fillStyle = "#dbe9d5"; rr(0, -22, w, 40, 8); g.fill();
+    txt(l, 14, 5, { size: 17, font: MONO, color: C.accent, weight: 600 });
+    g.restore();
+  }
+  caption("One retry. Nothing unvalidated is ever shown.", t, 4.1, 640);
+}
+
+function sceneApprove(t) {
+  bg(C.paper);
+  label("05  APPROVE");
+  words("Every message is checked. A human approves it.", t, 0.1, 0.07, W / 2, 130, { size: 44, align: "center" });
+  // message card
+  const mx = 70, my = 180, mw = 640, mh = 340;
+  const a = easeOut(prog(t, 0.5, 1.0));
+  g.save(); g.globalAlpha = a;
+  g.fillStyle = C.surface; rr(mx, my + (1 - a) * 14, mw, mh, 10); g.fill();
+  g.strokeStyle = C.line; g.lineWidth = 1.5; g.stroke();
+  g.restore();
+  txt("To: a***@example.test", mx + 28, my + 44, { size: 18, font: MONO, color: C.muted, alpha: a });
+  txt("A quick note about your Acme Cloud (demo) payment", mx + 28, my + 84, { size: 22, weight: 600, color: C.fg, alpha: a });
+  g.fillStyle = C.line; g.fillRect(mx + 28, my + 100, mw - 56, 1);
+  let n = Math.floor(Math.max(0, t - 1.0) * 115);
+  MSG.forEach((ln, i) => {
+    const part = ln.slice(0, Math.max(0, Math.min(ln.length, n)));
+    n -= ln.length + 3;
+    txt(part, mx + 28, my + 138 + i * 36, { size: 19, color: C.fg });
+  });
+  // checks
+  const cx = 790, cy = 190;
+  txt("CONTENT CHECKS", cx, cy, { size: 14, weight: 600, spacing: 1.8, color: C.muted, alpha: a });
+  CHECKS.forEach((c, i) => {
+    const ta = 1.8 + i * 0.2;
+    const k = easeOutBack(prog(t, ta, ta + 0.3));
+    const col = i % 2, row = Math.floor(i / 2);
+    const x = cx + col * 215, y = cy + 44 + row * 52;
+    if (k > 0) {
+      g.save(); g.globalAlpha = clamp(k);
+      txt("✓", x, y, { size: 24, color: C.accent, weight: 700 });
+      txt(c, x + 30, y, { size: 18, color: C.fg });
+      g.restore();
+    }
+  });
+  // approve button
+  const bx = 70, by = 560, bw = 640, bh = 64;
+  const press = prog(t, 3.5, 3.7);
+  const bk = easeOut(prog(t, 3.0, 3.5));
+  g.save(); g.globalAlpha = bk;
+  g.fillStyle = press > 0 && press < 1 ? "#34503f" : C.accent;
+  rr(bx, by + (1 - bk) * 14 + (press > 0 && press < 1 ? 2 : 0), bw, bh, 8); g.fill();
+  txt("Approve (will not be sent: delivery is disabled)", bx + bw / 2, by + 41 + (1 - bk) * 14, { size: 23, color: C.surface, align: "center", weight: 500 });
+  g.restore();
+  // stamp
+  if (t > 3.8) {
+    const k = easeOutBack(prog(t, 3.8, 4.2));
+    g.save(); g.translate(990, 592); g.rotate(-0.09); g.scale(k, k);
+    g.strokeStyle = C.accent; g.lineWidth = 4; rr(-190, -42, 380, 84, 6); g.stroke();
+    txt("NOTHING SENT", 0, 11, { size: 34, font: SERIF, weight: 600, color: C.accent, align: "center", spacing: 3 });
+    g.restore();
+  }
+  caption("Delivery is off by default. The decision is audited, the message body is not.", t, 4.3, 700);
+}
+
+function sceneEnd(t) {
+  bg(C.ink);
+  const a = easeOut(prog(t, 0.1, 0.9));
+  txt("Recoverly", W / 2, 270 + (1 - a) * 20, { size: 150, font: SERIF, weight: 500, color: C.cream, align: "center", alpha: a });
+  g.fillStyle = C.accentLight; g.fillRect(W / 2 - 120 * easeInOut(prog(t, 0.6, 1.3)), 300, 240 * easeInOut(prog(t, 0.6, 1.3)), 4);
+  words("Agents that run code. Humans who decide.", t, 1.1, 0.1, W / 2, 400, { size: 48, color: C.cream, align: "center", style: "italic" });
+  const items = ["Plan", "Code", "Sandbox", "Validate", "Approve"];
+  const total = items.reduce((s, it) => s + measure(it, 22, MONO) + 60, 0) - 28;
+  let x = W / 2 - total / 2;
+  items.forEach((it, i) => {
+    const al = easeOut(prog(t, 2.2 + i * 0.15, 2.6 + i * 0.15));
+    txt(it, x, 480, { size: 22, font: MONO, color: C.accentLight, alpha: al });
+    x += measure(it, 22, MONO);
+    if (i < items.length - 1) { txt("→", x + 14, 480, { size: 22, font: MONO, color: "#6c7d70", alpha: al }); x += 60; }
+  });
+  txt("CreateOS Sandbox   ·   Stripe Projects   ·   OpenRouter   ·   Next.js", W / 2, 580, { size: 22, color: "#b9b3a4", align: "center", alpha: easeOut(prog(t, 3.0, 3.6)) });
+  txt("Built for the CreateOS × Stripe “Build Agents That Run Code” hackathon. All demo data is synthetic.", W / 2, 625, { size: 17, color: "#8a8578", align: "center", alpha: easeOut(prog(t, 3.3, 3.9)) });
+}
+
+const SCENES = [sceneHook, sceneLogo, sceneAsk, sceneCode, sceneResults, sceneHeal, sceneApprove, sceneEnd];
+
+/* ---------- compositor ---------- */
+function draw(t) {
+  t = clamp(t, 0, TOTAL - 0.001);
+  let i = SCENES.length - 1;
+  for (let k = 0; k < SCENES.length; k++) if (t < SC[k + 1]) { i = k; break; }
+  g.save();
+  g.clearRect(0, 0, W, H);
+  SCENES[i](t - SC[i]);
+  g.restore();
+  // wipe transition: an accent band sweeps across the cut
+  for (let b = 1; b < SC.length - 1; b++) {
+    const d = t - SC[b];
+    if (Math.abs(d) < 0.22) {
+      const k = (d + 0.22) / 0.44; // 0..1
+      const x0 = k < 0.5 ? 0 : lerp(0, W, easeInOut((k - 0.5) * 2));
+      const x1 = k < 0.5 ? lerp(0, W, easeInOut(k * 2)) : W;
+      g.fillStyle = C.accent; g.fillRect(x0, 0, x1 - x0, H);
+    }
+  }
+  // film progress hairline
+  g.fillStyle = "rgba(62,92,77,0.9)"; g.fillRect(0, H - 4, W * (t / TOTAL), 4);
+}
+
+/* ---------- audio (synthesized, scheduled against the same timeline) ---------- */
+function buildAudio(actx, out) {
+  const base = actx.currentTime + 0.15;
+  const master = actx.createGain(); master.gain.value = 1.6; master.connect(out);
+  const noise = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
+  const nd = noise.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+
+  const tone = (f, t, dur, { type = "sine", gain = 0.05, attack = 0.01, detune = 0 } = {}) => {
+    const o = actx.createOscillator(), e = actx.createGain();
+    o.type = type; o.frequency.value = f; o.detune.value = detune;
+    e.gain.setValueAtTime(0.0001, base + t);
+    e.gain.linearRampToValueAtTime(gain, base + t + attack);
+    e.gain.exponentialRampToValueAtTime(0.0001, base + t + dur);
+    o.connect(e); e.connect(master); o.start(base + t); o.stop(base + t + dur + 0.05);
+  };
+  const burst = (t, dur, f0, f1, gain, q = 1.2) => {
+    const s = actx.createBufferSource(); s.buffer = noise;
+    const f = actx.createBiquadFilter(); f.type = "bandpass"; f.Q.value = q;
+    f.frequency.setValueAtTime(f0, base + t); f.frequency.exponentialRampToValueAtTime(f1, base + t + dur);
+    const e = actx.createGain();
+    e.gain.setValueAtTime(0.0001, base + t); e.gain.linearRampToValueAtTime(gain, base + t + dur * 0.35); e.gain.exponentialRampToValueAtTime(0.0001, base + t + dur);
+    s.connect(f); f.connect(e); e.connect(master); s.start(base + t, Math.random()); s.stop(base + t + dur + 0.05);
+  };
+  const tick = (t, gain = 0.05) => burst(t, 0.03, 3800, 5200, gain, 4);
+  const kick = (t, gain = 0.22) => {
+    const o = actx.createOscillator(), e = actx.createGain();
+    o.frequency.setValueAtTime(110, base + t); o.frequency.exponentialRampToValueAtTime(42, base + t + 0.22);
+    e.gain.setValueAtTime(gain, base + t); e.gain.exponentialRampToValueAtTime(0.0001, base + t + 0.32);
+    o.connect(e); e.connect(master); o.start(base + t); o.stop(base + t + 0.35);
+  };
+
+  // pad: A minor, slow swell with a gentle filter
+  const padF = actx.createBiquadFilter(); padF.type = "lowpass"; padF.frequency.value = 700; padF.connect(master);
+  [110, 164.81, 220, 261.63].forEach((f, i) => {
+    const o = actx.createOscillator(), e = actx.createGain();
+    o.type = i % 2 ? "triangle" : "sine"; o.frequency.value = f; o.detune.value = (i - 1.5) * 4;
+    e.gain.setValueAtTime(0.0001, base);
+    e.gain.linearRampToValueAtTime(0.05, base + 2);
+    e.gain.setValueAtTime(0.05, base + TOTAL - 3);
+    e.gain.linearRampToValueAtTime(0.0001, base + TOTAL);
+    o.connect(e); e.connect(padF); o.start(base); o.stop(base + TOTAL + 0.1);
+  });
+
+  const beat = 60 / BPM, eighth = beat / 2;
+  // heartbeat in the hook
+  for (let b = 2.5; b < 5; b += beat) kick(b, 0.12);
+  // pulse + arpeggio from the logo to the end card
+  const arp = [220, 329.63, 440, 329.63, 261.63, 392, 329.63, 293.66];
+  for (let t = SC[1], k = 0; t < SC[7] - 0.1; t += eighth, k++) {
+    tone(arp[k % arp.length], t, 0.42, { type: "triangle", gain: 0.042 });
+    if (k % 4 === 0) kick(t, 0.2);
+    if (k % 2 === 1) burst(t, 0.05, 6500, 7500, 0.012, 3);
+  }
+  // end: sustained chord
+  [220, 261.63, 329.63, 440].forEach((f) => tone(f, SC[7], 4.6, { type: "sine", gain: 0.05, attack: 0.3 }));
+  // whooshes on every cut
+  for (let b = 1; b < SC.length - 1; b++) burst(SC[b] - 0.25, 0.5, 400, 3600, 0.09, 0.8);
+  // typing ticks
+  const typing = (t0, n, cps) => { for (let i = 0; i < n; i += 2) tick(t0 + i / cps, 0.035); };
+  typing(SC[2] + 0.5, QUESTION.length, 70);
+  typing(SC[3] + 0.3, 285, 120);
+  typing(SC[6] + 1.0, 290, 115);
+  // pipeline pings
+  STAGE_T.forEach((s, i) => tone(520 + i * 90, SC[2] + s, 0.35, { gain: 0.06 }));
+  // sandbox done + validated
+  tone(660, SC[3] + 3.3, 0.3, { gain: 0.06 }); tone(880, SC[3] + 4.0, 0.5, { gain: 0.07 });
+  // ledger rows
+  ROWS.forEach((_, i) => tone(440 + i * 55, SC[4] + 1.9 + i * 0.28, 0.2, { type: "triangle", gain: 0.05 }));
+  tone(990, SC[4] + 4.3, 0.5, { gain: 0.05 });
+  // self-heal: buzz, then success
+  tone(110, SC[5] + 1.6, 0.35, { type: "square", gain: 0.05 });
+  tone(659, SC[5] + 3.6, 0.3, { gain: 0.06 }); tone(880, SC[5] + 3.75, 0.5, { gain: 0.06 });
+  // checks tick, button press, stamp
+  CHECKS.forEach((_, i) => tone(740 + (i % 5) * 60, SC[6] + 1.8 + i * 0.2, 0.12, { gain: 0.04 }));
+  burst(SC[6] + 3.5, 0.08, 1200, 700, 0.12, 2);
+  kick(SC[6] + 3.8, 0.28);
+  return base;
+}
+
+/* ---------- playback and recording ---------- */
+const $ = (id) => document.getElementById(id);
+const status = (s) => { $("status").textContent = s; };
+let raf = 0, actxRef = null;
+
+function run({ record }) {
+  cancelAnimationFrame(raf);
+  if (actxRef) { actxRef.close().catch(() => {}); actxRef = null; }
+  const actx = new AudioContext({ sampleRate: 48000 });
+  actxRef = actx;
+  const dest = actx.createMediaStreamDestination();
+  let recorder = null;
+  const chunks = [];
+  const finish = async () => {
+    if (!record) { status("preview finished"); return; }
+    recorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: recorder.mimeType });
+      status(`saving ${(blob.size / 1e6).toFixed(1)} MB ...`);
+      const name = recorder.mimeType.includes("mp4") ? "recoverly-trailer.mp4" : "recoverly-trailer.webm";
+      try {
+        const r = await fetch(`/save?name=${name}`, { method: "POST", body: blob });
+        const j = await r.json();
+        status(`saved ${name} (${j.bytes} bytes)`);
+        window.__saved = { name, bytes: j.bytes };
+      } catch (e) { status(`save failed: ${e}`); window.__saved = { error: String(e) }; }
+    };
+    recorder.stop();
+  };
+  actx.resume().then(() => {
+    window.__audioState = actx.state;
+    // audio goes to the recorder, and to the speakers during preview only
+    const out = actx.createGain(); out.connect(dest); if (!record) out.connect(actx.destination);
+    buildAudio(actx, out);
+    if (record) {
+      const stream = new MediaStream([...cv.captureStream(FPS).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+      const type = ["video/mp4;codecs=avc1.640028,mp4a.40.2", "video/mp4;codecs=avc1,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t));
+      recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 160_000 });
+      recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      recorder.start(500);
+      status(`recording (${type}) ...`);
+    } else status("playing");
+    const t0 = performance.now() + 150;
+    const loop = () => {
+      const t = (performance.now() - t0) / 1000;
+      draw(Math.max(0, t));
+      if (t < TOTAL + 0.3) raf = requestAnimationFrame(loop); else finish();
+    };
+    raf = requestAnimationFrame(loop);
+  });
+}
+
+/* Deterministic export: every frame is drawn at an exact timestamp and encoded with WebCodecs (H.264),
+   the audio is rendered offline and encoded as AAC, then muxed into a regular (progressive) MP4. */
+async function renderMp4() {
+  const { Muxer, ArrayBufferTarget } = window.Mp4Muxer;
+  const aacOk = (await AudioEncoder.isConfigSupported({ codec: "mp4a.40.2", sampleRate: 48000, numberOfChannels: 2, bitrate: 160000 })).supported;
+  if (!aacOk) throw new Error("AAC encoding is not available in this browser");
+  const target = new ArrayBufferTarget();
+  const muxer = new Muxer({ target, video: { codec: "avc", width: W, height: H }, audio: { codec: "aac", numberOfChannels: 2, sampleRate: 48000 }, fastStart: "in-memory" });
+  let err = null;
+  const venc = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: (e) => { err = e; } });
+  venc.configure({ codec: "avc1.640028", width: W, height: H, bitrate: 8_000_000, framerate: FPS });
+  const frames = Math.round(TOTAL * FPS);
+  for (let i = 0; i < frames; i++) {
+    if (err) throw err;
+    draw(i / FPS);
+    const frame = new VideoFrame(cv, { timestamp: Math.round((i * 1e6) / FPS), duration: Math.round(1e6 / FPS) });
+    venc.encode(frame, { keyFrame: i % FPS === 0 });
+    frame.close();
+    while (venc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 4));
+    if (i % 30 === 0) status(`rendering video ${Math.round((i / frames) * 100)}%`);
+  }
+  await venc.flush();
+  status("rendering audio ...");
+  const SR = 48000, LEAD = 0.15;
+  const off = new OfflineAudioContext(2, Math.ceil(SR * (TOTAL + LEAD + 0.5)), SR);
+  const out = off.createGain(); out.connect(off.destination);
+  buildAudio(off, out); // schedules everything starting at LEAD seconds
+  const rendered = await off.startRendering();
+  const start = Math.round(LEAD * SR), len = Math.round(TOTAL * SR);
+  const L = rendered.getChannelData(0).subarray(start, start + len), R = rendered.getChannelData(1).subarray(start, start + len);
+  // gentle fade in/out so the file never clicks
+  for (let i = 0; i < SR * 0.05; i++) { const k = i / (SR * 0.05); L[i] *= k; R[i] *= k; }
+  for (let i = 0; i < SR * 0.4; i++) { const k = i / (SR * 0.4); L[len - 1 - i] *= k; R[len - 1 - i] *= k; }
+  const aenc = new AudioEncoder({ output: (c, m) => muxer.addAudioChunk(c, m), error: (e) => { err = e; } });
+  aenc.configure({ codec: "mp4a.40.2", sampleRate: SR, numberOfChannels: 2, bitrate: 160000 });
+  const CH = 4800;
+  for (let p = 0; p < len; p += CH) {
+    const n = Math.min(CH, len - p);
+    const planar = new Float32Array(n * 2);
+    planar.set(L.subarray(p, p + n), 0); planar.set(R.subarray(p, p + n), n);
+    const data = new AudioData({ format: "f32-planar", sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round((p / SR) * 1e6), data: planar });
+    aenc.encode(data); data.close();
+  }
+  await aenc.flush();
+  if (err) throw err;
+  muxer.finalize();
+  const blob = new Blob([target.buffer], { type: "video/mp4" });
+  status(`saving ${(blob.size / 1e6).toFixed(1)} MB ...`);
+  const r = await fetch("/save?name=recoverly-trailer.mp4", { method: "POST", body: blob });
+  const j = await r.json();
+  status(`saved recoverly-trailer.mp4 (${j.bytes} bytes, ${TOTAL}s, ${frames} frames)`);
+  window.__saved = { name: "recoverly-trailer.mp4", bytes: j.bytes, frames };
+}
+$("render").onclick = () => renderMp4().catch((e) => { status("render failed: " + e); window.__saved = { error: String(e) }; });
+
+$("play").onclick = () => run({ record: false });
+$("rec").onclick = () => run({ record: true });
+window.__draw = draw;
+draw(0);
+</script>
+</body>
+</html>
