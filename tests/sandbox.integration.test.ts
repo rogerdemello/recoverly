@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { toSandboxData } from "../src/lib/domain/csv";
-import { runPython } from "../src/lib/sandbox/runner";
+import { getRunnerSandbox, isSandboxPausedError, runPython } from "../src/lib/sandbox/runner";
 import { loadFixtureDataset } from "../src/lib/store";
 import { golden } from "./helpers";
 
@@ -45,4 +45,22 @@ describe.skipIf(!live)("live sandbox", () => {
     const run = await runPython({ entry: "main.py", timeoutSeconds: 15, files: files(code) });
     expect(run.stdout.trim()).toBe("blocked");
   }, 60_000);
+
+  it("recovers when CreateOS paused the sandbox behind our cached handle", async () => {
+    const sandbox = await getRunnerSandbox(); // cached handle
+    await sandbox.pause();
+    await sandbox.waitUntilPaused();
+    const run = await runPython({ entry: "main.py", timeoutSeconds: 10, files: files("print(1)") });
+    expect(run.status).toBe("ok");
+    expect(run.stdout.trim()).toBe("1");
+  }, 120_000);
+});
+
+describe("isSandboxPausedError", () => {
+  it("recognizes the CreateOS 409 message and ignores other failures", () => {
+    expect(isSandboxPausedError(new Error("createos-sandbox request failed (409): sandbox is paused; resume it before running commands"))).toBe(true);
+    expect(isSandboxPausedError(new Error("sandbox is pausing"))).toBe(true);
+    expect(isSandboxPausedError(new Error("createos-sandbox request failed (500): boom"))).toBe(false);
+    expect(isSandboxPausedError("nope")).toBe(false);
+  });
 });

@@ -144,6 +144,17 @@ export function invalidateRunnerSandbox(): void {
 }
 
 /** Maps SDK failures to actionable, credential-free messages. */
+/**
+ * CreateOS auto-pauses an idle sandbox (auto_pause_after_seconds) while our cached handle still says "running";
+ * the next command then fails with HTTP 409 "sandbox is paused". That is recoverable: drop the cache and reacquire,
+ * which resumes the sandbox.
+ */
+export function isSandboxPausedError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : "";
+  const status = (err as { status?: number })?.status;
+  return /\b(paused|pausing)\b/i.test(message) || (status === 409 && /sandbox/i.test(message));
+}
+
 export function describeSandboxError(err: unknown): string {
   if (err instanceof CreateosSandboxPaymentRequiredError) {
     return "CreateOS account is out of sandbox credit. Top up or change plan, then retry.";
@@ -217,12 +228,12 @@ async function runOnce(sandbox: Sandbox, opts: RunPythonOptions): Promise<Sandbo
 }
 
 async function runPythonUnqueued(opts: RunPythonOptions): Promise<SandboxRunResult> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       return await runOnce(await getRunnerSandbox(), opts);
     } catch (err) {
-      // Sandbox destroyed out from under us: forget it and reacquire once.
-      if (err instanceof CreateosSandboxNotFoundError && attempt === 0) {
+      // Sandbox destroyed or auto-paused out from under us: forget it and reacquire (which resumes it).
+      if ((err instanceof CreateosSandboxNotFoundError || isSandboxPausedError(err)) && attempt < 2) {
         invalidateRunnerSandbox();
         continue;
       }

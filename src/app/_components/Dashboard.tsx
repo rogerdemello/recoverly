@@ -126,9 +126,11 @@ export function Dashboard() {
 
   return (
     <div className="page">
-      <header className="hero">
-        <div className="hero-top">
-        <span className="logo"><span className="logo-mark" aria-hidden="true" />Recoverly</span>
+      <header className="header">
+        <div className="brand">
+          <h1>Recoverly</h1>
+          <p className="tagline">A desk for failed subscription payments. It ranks what to chase first and says why. The analysis code is written by an agent and run in an isolated sandbox.</p>
+        </div>
         <div className="chips" aria-label="Integrations">
           {healthError ? (
             <span className="chip off"><span className="dot" />Server unreachable</span>
@@ -141,25 +143,7 @@ export function Dashboard() {
           )}
           <button className="btn" onClick={() => setAuditOpen(true)}>Audit log</button>
         </div>
-        </div>
-        <div className="hero-body">
-          <h1>Win back failed payments, <span className="grad">with proof.</span></h1>
-          <p className="tagline">Explainable failed-payment recovery. Analysis code is written by an agent and run in an isolated sandbox.</p>
-          <ul className="hero-points">
-            <li>An agent writes the analysis code</li>
-            <li>Runs in an isolated CreateOS Sandbox</li>
-            <li>You approve every message</li>
-          </ul>
-        </div>
       </header>
-
-      {!dataset && !run && (
-        <ol className="steps3" aria-label="How it works">
-          <li><strong>Load your data</strong><span>Use the synthetic demo set or upload a CSV of failed invoices.</span></li>
-          <li><strong>Ask in plain English</strong><span>The agent plans it, writes Python, and runs it in the sandbox.</span></li>
-          <li><strong>Review and approve</strong><span>See a ranked, explained queue, then approve a drafted message.</span></li>
-        </ol>
-      )}
 
       {needsCode && (
         <div className="notice warn" role="alert">
@@ -175,12 +159,12 @@ export function Dashboard() {
       <section className="card" aria-label="Data source">
         <header>
           <h2>Data</h2>
-          <div className="row">
-            <button className="btn primary" onClick={loadDemo} disabled={loadingData}>Load demo data</button>
-            <button className="btn" onClick={() => fileRef.current?.click()} disabled={loadingData}>Upload CSV</button>
-            <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => void onFile(e.target.files?.[0])} aria-label="Upload CSV file" />
-          </div>
         </header>
+        <div className="row">
+          <button className="btn primary" onClick={loadDemo} disabled={loadingData}>Load demo data</button>
+          <button className="btn" onClick={() => fileRef.current?.click()} disabled={loadingData}>Upload CSV</button>
+          <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => void onFile(e.target.files?.[0])} aria-label="Upload CSV file" />
+        </div>
         {!dataset && !dataError && (
           <p className="muted" style={{ margin: 0 }}>
             Load the synthetic demo dataset (13 failed invoices, USD and EUR) or upload a CSV with the documented columns. Customer emails are masked before anything reaches the sandbox.
@@ -222,9 +206,10 @@ export function Dashboard() {
         </header>
         <label htmlFor="question" className="sr-only">Question</label>
         <textarea id="question" className="ask" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask a plain-English question about the failed payments…" />
-        <div className="row" style={{ margin: "10px 0" }} aria-label="Example questions">
+        <div className="tries" aria-label="Example questions">
+          <span className="muted small">Try:</span>
           {EXAMPLE_QUESTIONS.map((q) => (
-            <button key={q} className="example" onClick={() => setQuestion(q)}>{q.length > 70 ? `${q.slice(0, 68)}…` : q}</button>
+            <button key={q} className="example" onClick={() => setQuestion(q)}>{q.length > 64 ? `${q.slice(0, 62)}…` : q}</button>
           ))}
         </div>
         <div className="row">
