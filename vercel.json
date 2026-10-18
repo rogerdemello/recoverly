@@ -1,5 +1,22 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "regions": ["fra1"]
+  "regions": [
+    "fra1"
+  ],
+  "services": {
+    "recoverly": {
+      "root": ".",
+      "framework": "nextjs",
+      "buildCommand": "npm run build"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "recoverly"
+      }
+    }
+  ]
 }
