@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Recoverly thumbnail</title>
+<style>
+  body { margin: 0; background: #111; display: grid; place-items: center; min-height: 100vh; }
+  canvas { width: min(100vw, 1280px); height: auto; aspect-ratio: 16 / 9; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<script>
+/* YouTube thumbnail (1280x720). Drawn in code like the trailer: few words, high contrast, readable at small size.
+   Open /thumbnail.html?save=1 to render and save video/out/recoverly-thumbnail.png via the local server. */
+const W = 1280, H = 720;
+const g = document.getElementById("c").getContext("2d");
+const C = { ink: "#1f1d19", cream: "#f3efe4", paper: "#faf8f2", fg: "#26231f", muted: "#6b6559", line: "#d9d3c4", brick: "#e58b78", brickDark: "#9a3b26", green: "#a9cbb6", greenDark: "#3b6a4c" };
+const SERIF = '"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif';
+const SANS = 'system-ui,"Segoe UI",Roboto,sans-serif';
+const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+
+function txt(s, x, y, o = {}) {
+  g.save();
+  g.font = `${o.style ?? ""} ${o.weight ?? 400} ${o.size ?? 28}px ${o.font ?? SANS}`.trim();
+  g.fillStyle = o.color ?? C.cream;
+  g.textAlign = o.align ?? "left";
+  if (o.spacing) g.letterSpacing = `${o.spacing}px`;
+  g.fillText(s, x, y);
+  g.restore();
+}
+function rr(x, y, w, h, r) {
+  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+
+function draw() {
+  // background with faint ledger rules
+  g.fillStyle = C.ink; g.fillRect(0, 0, W, H);
+  g.fillStyle = "rgba(243,239,228,0.05)";
+  for (let y = 60; y < H; y += 48) g.fillRect(0, y, W, 1);
+
+  // top tag
+  txt("RECOVERLY", 70, 86, { size: 26, font: MONO, color: C.green, spacing: 6, weight: 600 });
+  g.fillStyle = C.green; g.fillRect(70, 104, 76, 4);
+
+  // headline
+  txt("Failed payments,", 70, 250, { size: 112, font: SERIF, weight: 500 });
+  txt("ranked", 70, 372, { size: 112, font: SERIF, weight: 500, style: "italic", color: C.brick });
+  const rw = (() => { g.font = `italic 500 112px ${SERIF}`; return g.measureText("ranked ").width; })();
+  txt("& explained.", 70 + rw, 372, { size: 112, font: SERIF, weight: 500 });
+
+  // sub line
+  txt("An AI agent writes the code.", 72, 452, { size: 40, color: "#d8d2c3", weight: 500 });
+  txt("A sandbox runs it. You approve.", 72, 506, { size: 40, color: "#d8d2c3", weight: 500 });
+
+  // sandbox badge (lock icon + label)
+  const bx = 72, by = 580;
+  g.strokeStyle = C.green; g.lineWidth = 5;
+  g.beginPath(); g.arc(bx + 20, by + 8, 14, Math.PI, 0); g.stroke();
+  g.fillStyle = C.green; rr(bx, by + 8, 40, 34, 5); g.fill();
+  txt("CreateOS Sandbox", bx + 62, by + 26, { size: 30, font: MONO, color: C.cream, weight: 600 });
+  txt("network off", bx + 62, by + 56, { size: 22, font: MONO, color: C.green });
+
+  // ledger card, slightly rotated
+  g.save();
+  g.translate(835, 404); g.rotate(-0.045);
+  g.fillStyle = "rgba(0,0,0,0.35)"; rr(-8, 8, 430, 250, 6); g.fill();
+  g.fillStyle = C.paper; rr(-12, 0, 430, 250, 6); g.fill();
+  txt("USD recovery queue", 12, 40, { size: 22, font: SERIF, color: C.fg, style: "italic" });
+  g.fillStyle = C.fg; g.fillRect(12, 56, 382, 2);
+  const rows = [
+    ["1", "$499.00", "URGENT", "85.0", C.brickDark, "#f1dbd2", "Update payment method"],
+    ["2", "$320.00", "HIGH", "55.5", "#9a5420", "#f1ded0", "Review manually"],
+    ["3", "$79.00", "MEDIUM", "40.4", "#7c6a1c", "#f1e6c8", "Update payment method"],
+  ];
+  rows.forEach(([rank, amt, pri, score, fc, bg, act], i) => {
+    const y = 96 + i * 62;
+    txt(rank, 12, y, { size: 26, font: SERIF, color: C.fg });
+    txt(amt, 44, y, { size: 28, font: SERIF, color: C.fg, weight: 700 });
+    g.font = `700 16px ${SANS}`;
+    const pw = g.measureText(pri).width + 14;
+    g.fillStyle = bg; rr(190, y - 20, pw, 26, 3); g.fill();
+    txt(pri, 197, y - 1, { size: 16, color: fc, weight: 700, spacing: 0.5 });
+    txt(score, 360, y, { size: 24, font: SERIF, color: C.fg, align: "right" });
+    txt(act, 44, y + 24, { size: 15, color: C.muted });
+    g.fillStyle = C.line; g.fillRect(12, y + 34, 382, 1);
+  });
+  g.restore();
+
+  // synthetic-data footnote
+  txt("synthetic demo data", W - 70, H - 24, { size: 18, font: MONO, color: "#8a8578", align: "right" });
+}
+draw();
+
+if (new URLSearchParams(location.search).get("save") === "1") {
+  document.getElementById("c").toBlob(async (blob) => {
+    const r = await fetch("/save?name=recoverly-thumbnail.png", { method: "POST", body: blob });
+    window.__saved = await r.json();
+    document.title = "saved";
+  }, "image/png");
+}
+</script>
+</body>
+</html>
