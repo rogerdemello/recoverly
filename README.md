@@ -5,7 +5,7 @@
 Built for the CreateOS x Stripe "Build Agents That Run Code" hackathon.
 
 - Demo video: _add the YouTube link here_
-- Live app: _add the deployed URL here_
+- Live app: https://recoverly-mu.vercel.app (also on CreateOS: https://production-recoverly.tyzo.nodeops.app, an older build because the CreateOS plan allows only two deployments)
 - All data in this repository is **synthetic**.
 
 ## How it works
