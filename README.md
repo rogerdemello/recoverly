@@ -68,6 +68,13 @@ Credentials come from Stripe Projects: `stripe projects add createos/project` an
 | `RECOVERLY_ENABLE_SEND` | Delivery stays off unless this is exactly `true`; no delivery adapter ships |
 | `BUSINESS_NAME`, `SUPPORT_CONTACT` | Used in drafted messages |
 
+### Deploy
+
+Set the secrets (`CREATEOS_PROJECT_API_KEY`, `OPENROUTER_API_KEY`, optionally `RECOVERLY_ACCESS_CODE`) in the host's dashboard, never in the repo. The other variables have defaults in the table above.
+
+- **Render (recommended).** `render.yaml` is a blueprint: New > Blueprint, pick this repo, fill the three secrets. It runs `next start` on a long-lived Node service with `/api/health` as the health check. The free plan sleeps when idle and loses in-memory state on restart.
+- **Vercel.** `vercel.json` pins the Frankfurt region (next to the EU sandbox endpoint); import the repo, add the same env vars, deploy. `/api/analyze` already sets `maxDuration = 120`, which needs a plan that allows it. Functions are serverless, so in-memory state is not guaranteed to persist between requests: the bundled demo dataset and analysis work, but uploaded datasets and the analyze-then-draft-then-approve flow can lose state on a cold start or another instance. Use Render for the full flow.
+
 ### Commands
 
 ```bash

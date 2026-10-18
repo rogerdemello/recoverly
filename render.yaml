@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: recoverly
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 24
+      - key: CREATEOS_SANDBOX_BASE_URL
+        value: https://api-eu.sb.createos.sh
+      - key: RECOVERLY_ENABLE_SEND
+        value: "false"
+      - key: BUSINESS_NAME
+        value: Acme Cloud (demo)
+      - key: SUPPORT_CONTACT
+        value: support@example.test
+      # Secrets: set these in the Render dashboard, never in this file.
+      - key: CREATEOS_PROJECT_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: RECOVERLY_ACCESS_CODE
+        sync: false
